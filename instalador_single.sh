@@ -1942,8 +1942,10 @@ instala_frontend_base() {
     exit 1
   fi
   
+  set -euo pipefail
   npm install --force
   npx browserslist@latest --update-db
+  npm install -g serve
 FRONTENDINSTALL
 
     sleep 2
@@ -1983,7 +1985,12 @@ EOF
     sed -i 's/3000/'"${frontend_port}"'/g' server.js
   fi
   
-  NODE_OPTIONS="--max-old-space-size=4096 --openssl-legacy-provider" npm run build
+  CI=false GENERATE_SOURCEMAP=false NODE_OPTIONS="--max-old-space-size=2048 --openssl-legacy-provider" npm run build
+
+  if [ ! -f "build/index.html" ]; then
+    echo "ERRO: build/index.html não foi gerado"
+    exit 1
+  fi
 FRONTENDBUILD
 
     sleep 2
@@ -2000,12 +2007,13 @@ FRONTENDBUILD
   
   cd "/home/deploy/${empresa}/frontend"
   
-  if [ ! -f "server.js" ]; then
-    echo "ERRO: server.js não encontrado"
+  if ! command -v serve >/dev/null 2>&1; then
+    echo "ERRO: binário 'serve' não encontrado"
     exit 1
   fi
   
-  pm2 start server.js --name ${empresa}-frontend
+  pm2 delete ${empresa}-frontend 2>/dev/null || true
+  pm2 start serve --name ${empresa}-frontend -- -s build -l ${frontend_port}
   pm2 save
 PM2FRONTEND
 
