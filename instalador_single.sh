@@ -31,11 +31,8 @@ detect_transcr_dir() {
 }
 
 TRANSCR_DIR=$(detect_transcr_dir) || {
-  echo " >> Instalando Transcrição de Áudio Nativa..."
-  echo " >> Não foi possível localizar 'api_transcricao' em $DEPLOY_ROOT nem em DEPLOY_DIR."
-  echo " >> Informe a variável DEPLOY_DIR apontando para a pasta da sua empresa, por exemplo:"
-  echo "    export DEPLOY_DIR=/home/deploy/wabootflow"
-  exit 1
+  TRANSCR_DIR=""
+  echo " >> Aviso: 'api_transcricao' não encontrada; a instalação principal continuará sem a transcrição."
 }
 # --- fim: detecção dinâmica ---
 
