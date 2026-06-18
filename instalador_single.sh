@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # --- início: detecção dinâmica do diretório de deploy ---
 # Permite sobrepor com variáveis de ambiente:
 #   DEPLOY_ROOT  (padrão: /home/deploy)
@@ -35,8 +37,6 @@ TRANSCR_DIR=$(detect_transcr_dir) || {
   echo " >> Aviso: 'api_transcricao' não encontrada; a instalação principal continuará sem a transcrição."
 }
 # --- fim: detecção dinâmica ---
-
-#!/bin/bash
 
 GREEN='\033[1;32m'
 BLUE='\033[1;34m'
