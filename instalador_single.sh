@@ -347,6 +347,7 @@ menu() {
     printf "   [${BLUE}1${WHITE}] Instalar ${nome_titulo} ${CYAN}(Backend + Frontend)${WHITE}\n"
     printf "   [${BLUE}2${WHITE}] Instalar API Oficial ${YELLOW}(WhatsApp Business)${WHITE}\n"
     printf "   [${BLUE}3${WHITE}] Instalar Transcrição de Áudio ${YELLOW}(API Python)${WHITE}\n"
+    printf "   [${BLUE}4${WHITE}] Atualizar/Reparar sistema ${YELLOW}(retomar o que faltou)${WHITE}\n"
     printf "   [${BLUE}0${WHITE}] Sair\n"
     echo
     read -p "> " option
@@ -359,6 +360,9 @@ menu() {
       ;;
     3)
       instalar_transcricao_audio_nativa
+      ;;
+    4)
+      atualizar_base
       ;;
     0)
       sair
@@ -477,12 +481,67 @@ instalacao_base() {
   fi
 }
 
-# Etapa de atualização
+# Verifica se o backend está realmente online
+backend_instalado_ok() {
+  [ -f "/home/deploy/${empresa}/backend/dist/server.js" ] && sudo su - deploy -c "pm2 list | grep -q '${empresa}-backend.*online'" >/dev/null 2>&1
+}
+
+# Verifica se o frontend está realmente online
+frontend_instalado_ok() {
+  [ -f "/home/deploy/${empresa}/frontend/build/index.html" ] && sudo su - deploy -c "pm2 list | grep -q '${empresa}-frontend.*online'" >/dev/null 2>&1
+}
+
+# Verifica se o certificado SSL já existe
+ssl_instalado_ok() {
+  local domain="$1"
+  [ -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/${domain}/privkey.pem" ]
+}
+
+corrige_build_backend_base() {
+  local target_file="/home/deploy/${empresa}/backend/src/services/MessageServices/TranscribeAudioMessageService.ts"
+  if [ -f "$target_file" ]; then
+    sed -i "s|contentType: audioResponse.headers\['content-type'\] || 'audio/ogg'|contentType: String(audioResponse.headers['content-type'] || 'audio/ogg')|g" "$target_file"
+  fi
+}
+
+# Etapa de atualização / reparo
 atualizar_base() {
-  backup_app_atualizar || trata_erro "backup_app_atualizar"
-  instala_ffmpeg_base || trata_erro "instala_ffmpeg_base"
-  config_cron_base || trata_erro "config_cron_base"
-  baixa_codigo_atualizar || trata_erro "baixa_codigo_atualizar"
+  carregar_variaveis
+  carregar_etapa
+
+  if [ "$etapa" -gt 0 ] && [ "$etapa" -lt 21 ]; then
+    banner
+    printf "${YELLOW} >> Instalação interrompida detectada na etapa ${etapa}. Retomando de onde parou...${WHITE}\n"
+    sleep 2
+    instalacao_base
+    return 0
+  fi
+
+  banner
+  printf "${WHITE} >> Verificando componentes já instalados e reparando apenas o que estiver faltando...\n"
+  echo
+
+  if ! backend_instalado_ok; then
+    printf "${YELLOW} >> Backend ausente ou offline. Reexecutando a instalação do backend...${WHITE}\n"
+    corrige_build_backend_base
+    instala_backend_base || trata_erro "instala_backend_base"
+  fi
+
+  if ! frontend_instalado_ok; then
+    printf "${YELLOW} >> Frontend ausente ou offline. Reexecutando a instalação do frontend...${WHITE}\n"
+    instala_frontend_base || trata_erro "instala_frontend_base"
+  fi
+
+  if [ "${proxy}" = "nginx" ]; then
+    config_nginx_base || trata_erro "config_nginx_base"
+  elif [ "${proxy}" = "traefik" ]; then
+    config_traefik_base || trata_erro "config_traefik_base"
+  fi
+
+  salvar_etapa 21
+  banner
+  printf "${GREEN} >> Atualização/reparo concluído. Apenas o que faltava foi instalado.${WHITE}\n"
+  sleep 2
 }
 
 sair() {
@@ -586,10 +645,15 @@ END"
 
   # SSL
   printf "${WHITE} >> Emitindo certificado SSL para ${subdominio_oficial}...${WHITE}\n"
-  sudo certbot -m "${email_deploy}" --nginx --agree-tos --expand -n -d "${subdominio_oficial}" || {
-    printf "${YELLOW} >> Aviso: Falha no SSL. Tente manualmente: certbot --nginx -d ${subdominio_oficial}${WHITE}\n"
-    sleep 3
-  }
+  if ssl_instalado_ok "${subdominio_oficial}"; then
+    printf "${GREEN} >> SSL já existe para ${subdominio_oficial}. Pulando emissão.${WHITE}\n"
+  else
+    sudo certbot -m "${email_deploy}" --nginx --agree-tos --expand -n -d "${subdominio_oficial}" || {
+      printf "${YELLOW} >> Aviso: Falha no SSL. Tente manualmente: certbot --nginx -d ${subdominio_oficial}${WHITE}\n"
+      sleep 3
+      return 1
+    }
+  fi
 }
 
 # Criar banco da API Oficial
@@ -1819,6 +1883,9 @@ EOF
   fi
   
   cd "\$BACKEND_DIR"
+  if [ -f "src/services/MessageServices/TranscribeAudioMessageService.ts" ]; then
+    sed -i "s|contentType: audioResponse.headers\['content-type'\] || 'audio/ogg'|contentType: String(audioResponse.headers['content-type'] || 'audio/ogg')|g" src/services/MessageServices/TranscribeAudioMessageService.ts
+  fi
   
   if [ ! -f "package.json" ]; then
     echo "ERRO: package.json não encontrado em \$BACKEND_DIR"
@@ -1831,6 +1898,7 @@ EOF
   npm install --force
   npm install puppeteer-core --force
   npm i glob
+  set -euo pipefail
   npm run build
 BACKENDINSTALL
 
@@ -1901,6 +1969,7 @@ SEEDINSTALL
     exit 1
   fi
   
+  pm2 delete ${empresa}-backend 2>/dev/null || true
   pm2 start dist/server.js --name ${empresa}-backend
 PM2BACKEND
 
@@ -1945,7 +2014,6 @@ instala_frontend_base() {
   set -euo pipefail
   npm install --force
   npx browserslist@latest --update-db
-  npm install -g serve
 FRONTENDINSTALL
 
     sleep 2
@@ -2007,13 +2075,8 @@ FRONTENDBUILD
   
   cd "/home/deploy/${empresa}/frontend"
   
-  if ! command -v serve >/dev/null 2>&1; then
-    echo "ERRO: binário 'serve' não encontrado"
-    exit 1
-  fi
-  
   pm2 delete ${empresa}-frontend 2>/dev/null || true
-  pm2 start serve --name ${empresa}-frontend -- -s build -l ${frontend_port}
+  pm2 start npx --name ${empresa}-frontend -- --yes serve -s build -l ${frontend_port}
   pm2 save
 PM2FRONTEND
 
@@ -2126,7 +2189,10 @@ EOF
     printf "${WHITE} >> Emitindo SSL do ${subdominio_backend}...\n"
     echo
     backend_domain=$(echo "${subdominio_backend/https:\/\//}")
-    sudo su - root <<EOF
+    if ssl_instalado_ok "${backend_domain}"; then
+      printf "${GREEN} >> SSL do backend já existe. Pulando emissão.${WHITE}\n"
+    else
+      sudo su - root <<EOF
     certbot -m ${email_deploy} \
             --nginx \
             --agree-tos \
@@ -2134,6 +2200,10 @@ EOF
             -n \
             -d ${backend_domain}
 EOF
+      if [ $? -ne 0 ]; then
+        return 1
+      fi
+    fi
 
     sleep 2
 
@@ -2141,7 +2211,10 @@ EOF
     printf "${WHITE} >> Emitindo SSL do ${subdominio_frontend}...\n"
     echo
     frontend_domain=$(echo "${subdominio_frontend/https:\/\//}")
-    sudo su - root <<EOF
+    if ssl_instalado_ok "${frontend_domain}"; then
+      printf "${GREEN} >> SSL do frontend já existe. Pulando emissão.${WHITE}\n"
+    else
+      sudo su - root <<EOF
     certbot -m ${email_deploy} \
             --nginx \
             --agree-tos \
@@ -2149,6 +2222,10 @@ EOF
             -n \
             -d ${frontend_domain}
 EOF
+      if [ $? -ne 0 ]; then
+        return 1
+      fi
+    fi
 
     sleep 2
   } || trata_erro "config_nginx_base"
@@ -2361,6 +2438,9 @@ STOPPM2
   git reset --hard origin/MULTI100-OFICIAL-u21
   
   cd "\$BACKEND_DIR"
+  if [ -f "src/services/MessageServices/TranscribeAudioMessageService.ts" ]; then
+    sed -i "s|contentType: audioResponse.headers\['content-type'\] || 'audio/ogg'|contentType: String(audioResponse.headers['content-type'] || 'audio/ogg')|g" src/services/MessageServices/TranscribeAudioMessageService.ts
+  fi
   npm prune --force > /dev/null 2>&1
   export PUPPETEER_SKIP_DOWNLOAD=true
   rm -rf node_modules 2>/dev/null || true
@@ -2368,7 +2448,8 @@ STOPPM2
   npm install --force
   npm install puppeteer-core --force
   npm i glob
-  npm run build
+  set -euo pipefail
+  CI=false GENERATE_SOURCEMAP=false NODE_OPTIONS="--max-old-space-size=2048 --openssl-legacy-provider" npm run build
   sleep 2
   npx sequelize db:migrate
   sleep 2
@@ -2376,12 +2457,8 @@ STOPPM2
   cd "\$FRONTEND_DIR"
   npm prune --force > /dev/null 2>&1
   npm install --force
-  
-  if [ -f "server.js" ]; then
-    sed -i 's/3000/'"$frontend_port"'/g' server.js
-  fi
-  
-  NODE_OPTIONS="--max-old-space-size=4096 --openssl-legacy-provider" npm run build
+
+  CI=false GENERATE_SOURCEMAP=false NODE_OPTIONS="--max-old-space-size=2048 --openssl-legacy-provider" npm run build
   sleep 2
   pm2 flush
   pm2 reset all
