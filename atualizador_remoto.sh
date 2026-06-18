@@ -13,7 +13,7 @@ ARQUIVO_VARIAVEIS="VARIAVEIS_INSTALACAO"
 ARQUIVO_ETAPAS="ETAPA_INSTALACAO"
 FFMPEG="$(pwd)/ffmpeg.x"
 FFMPEG_DIR="$(pwd)/ffmpeg"
-ip_atual=$(curl -s http://checkip.amazonaws.com)
+ip_atual=$(hostname -I | awk '{print $1}')
 jwt_secret=$(openssl rand -base64 32)
 jwt_refresh_secret=$(openssl rand -base64 32)
 
@@ -183,30 +183,6 @@ backup_app_atualizar() {
     sleep 2
   } || trata_erro "backup_app_atualizar"
 
-# Dados do Whaticket
-TOKEN="u"
-QUEUE_ID="15"
-USER_ID=""
-MENSAGEM="🚨 INICIANDO Atualização do ${nome_titulo}"
-
-# Lista de números
-NUMEROS=("${numero_suporte}" "5")
-
-# Enviar para cada número
-for NUMERO in "${NUMEROS[@]}"; do
-  curl -s -X POST https://api \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "Content-Type: application/json" \
-    -d '{
-      "number": "'"$NUMERO"'",
-      "body": "'"$MENSAGEM"'",
-      "userId": "'"$USER_ID"'",
-      "queueId": "'"$QUEUE_ID"'",
-      "sendSignature": false,
-      "closeTicket": true
-    }'
-done
-  
 }
 
 otimiza_banco_atualizar() {
@@ -396,20 +372,6 @@ MENSAGEM="🚨 Atualização do ${nome_titulo} FINALIZADA"
 # Lista de números
 NUMEROS=("${numero_suporte}" "55")
 
-# Enviar para cada número
-for NUMERO in "${NUMEROS[@]}"; do
-  curl -s -X POST https://api \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "Content-Type: application/json" \
-    -d '{
-      "number": "'"$NUMERO"'",
-      "body": "'"$MENSAGEM"'",
-      "userId": "'"$USER_ID"'",
-      "queueId": "'"$QUEUE_ID"'",
-      "sendSignature": false,
-      "closeTicket": true
-    }'
-done
 
 }
 

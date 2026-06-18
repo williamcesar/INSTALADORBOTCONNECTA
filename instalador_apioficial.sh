@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 ARCH=$(uname -m)
 UBUNTU_VERSION=$(lsb_release -sr)
 ARQUIVO_VARIAVEIS="VARIAVEIS_INSTALACAO"
-ip_atual=$(curl -s http://checkip.amazonaws.com)
+ip_atual=$(hostname -I | awk '{print $1}')
 default_apioficial_port=6000
 
 if [ "$EUID" -ne 0 ]; then

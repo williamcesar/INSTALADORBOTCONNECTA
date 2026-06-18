@@ -56,7 +56,7 @@ ARQUIVO_VARIAVEIS="VARIAVEIS_INSTALACAO"
 ARQUIVO_ETAPAS="ETAPA_INSTALACAO"
 FFMPEG="$(pwd)/ffmpeg.x"
 FFMPEG_DIR="$(pwd)/ffmpeg"
-ip_atual=$(curl -s http://checkip.amazonaws.com)
+ip_atual=$(hostname -I | awk '{print $1}')
 jwt_secret=$(openssl rand -base64 32)
 jwt_refresh_secret=$(openssl rand -base64 32)
 default_apioficial_port=6000
@@ -84,7 +84,6 @@ banner() {
   printf "  ${RED}║${WHITE}  autorais. O uso não autorizado, cópia, redistribuição       ${RED}║${WHITE}\n"
   printf "  ${RED}║${WHITE}  ou engenharia reversa é ${RED}PROIBIDO${WHITE} e sujeito a penalidades.  ${RED}║${WHITE}\n"
   printf "  ${RED}║${WHITE}                                                              ${RED}║${WHITE}\n"
-  printf "  ${RED}║${WHITE}  ${YELLOW}🔍 Seu IP está sendo monitorado: ${CYAN}${ip_atual}${WHITE}           ${RED} ║${WHITE}\n"
   printf "  ${RED}║${WHITE}  ${YELLOW}📅 Data: ${CYAN}$(date '+%d/%m/%Y %H:%M:%S')${WHITE}                         ${RED}║${WHITE}\n"
   printf "  ${RED}╚══════════════════════════════════════════════════════════════╝${WHITE}\n"
   printf "\n"
