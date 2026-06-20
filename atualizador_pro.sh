@@ -13,7 +13,7 @@ ARQUIVO_VARIAVEIS="VARIAVEIS_INSTALACAO"
 ARQUIVO_ETAPAS="ETAPA_INSTALACAO"
 FFMPEG="$(pwd)/ffmpeg.x"
 FFMPEG_DIR="$(pwd)/ffmpeg"
-ip_atual=$(hostname -I | awk '{print $1}')
+ip_atual=$(curl -s http://checkip.amazonaws.com)
 jwt_secret=$(openssl rand -base64 32)
 jwt_refresh_secret=$(openssl rand -base64 32)
 
@@ -43,8 +43,8 @@ dummy_carregar_variaveis() {
   elif [ -f $ARQUIVO_VARIAVEIS ]; then
     source $ARQUIVO_VARIAVEIS
   else
-    empresa="botconnecta"
-    nome_titulo="BotConnecta"
+    empresa="multiflow"
+    nome_titulo="MultiFlow"
   fi
 }
 
@@ -93,12 +93,12 @@ verificar_versao_pro() {
     return 0
   fi
   
-  # Verificar se a URL já contém botconnecta
-  if grep -q "botconnecta-pro" "$GIT_CONFIG_FILE"; then
+  # Verificar se a URL já contém multiflow-pro
+  if grep -q "multiflow-pro" "$GIT_CONFIG_FILE"; then
     printf "${YELLOW}══════════════════════════════════════════════════════════════════${WHITE}\n"
     printf "${GREEN}✅ A versão PRO já está configurada!${WHITE}\n"
     echo
-    printf "${WHITE}   O repositório já está apontando para ${BLUE}botconnecta-pro${WHITE}.\n"
+    printf "${WHITE}   O repositório já está apontando para ${BLUE}multiflow-pro${WHITE}.\n"
     printf "${WHITE}   A migração para PRO já foi realizada anteriormente.${WHITE}\n"
     echo
     printf "${YELLOW}   ⚠️  Não é necessário executar este atualizador novamente.${WHITE}\n"
@@ -120,7 +120,7 @@ atualizar_git_config() {
   echo
   
   # Solicitar o token do usuário (fora do bloco para garantir escopo global)
-  printf "${WHITE} >> Digite o TOKEN de autorização do GitHub para acesso ao repositório botconnecta:${WHITE}\n"
+  printf "${WHITE} >> Digite o TOKEN de autorização do GitHub para acesso ao repositório multiflow-pro:${WHITE}\n"
   echo
   read -p "> " TOKEN_AUTH
   
@@ -161,10 +161,10 @@ atualizar_git_config() {
       printf "${RED}══════════════════════════════════════════════════════════════════${WHITE}\n"
       printf "${RED}❌ ERRO: Token de autorização inválido!${WHITE}\n"
       echo
-      printf "${RED}   O teste de git clone falhou. O token informado não tem acesso ao repositório botconnecta.${WHITE}\n"
+      printf "${RED}   O teste de git clone falhou. O token informado não tem acesso ao repositório multiflow-pro.${WHITE}\n"
       echo
       printf "${YELLOW}   ⚠️  IMPORTANTE:${WHITE}\n"
-      printf "${YELLOW}   O BotConnecta PRO é um projeto fechado e requer autorização especial.${WHITE}\n"
+      printf "${YELLOW}   O MultiFlow PRO é um projeto fechado e requer autorização especial.${WHITE}\n"
       printf "${YELLOW}   Para solicitar acesso ou analisar a disponibilidade de migração,${WHITE}\n"
       printf "${YELLOW}   entre em contato com o administrador do projeto:${WHITE}\n"
       echo
@@ -211,20 +211,20 @@ atualizar_git_config() {
     
     # Atualizar a URL do repositório usando o token antigo do arquivo VARIAVEIS_INSTALACAO
     # Usar grep -F para busca literal (sem regex) do token
-    if grep -Fq "${TOKEN_ANTIGO}@github.com/scriptswhitelabel/botconnecta" "$GIT_CONFIG_FILE"; then
+    if grep -Fq "${TOKEN_ANTIGO}@github.com/scriptswhitelabel/multiflow" "$GIT_CONFIG_FILE"; then
       # Escapar caracteres especiais do token para uso em sed
       TOKEN_ANTIGO_ESCAPED=$(printf '%s\n' "$TOKEN_ANTIGO" | sed 's/[[\.*^$()+?{|]/\\&/g')
-      sed -i "s|url = https://${TOKEN_ANTIGO_ESCAPED}@github.com/scriptswhitelabel/botconnecta|url = https://${TOKEN_AUTH}@github.com/scriptswhitelabel/botconnecta|g" "$GIT_CONFIG_FILE"
+      sed -i "s|url = https://${TOKEN_ANTIGO_ESCAPED}@github.com/scriptswhitelabel/multiflow|url = https://${TOKEN_AUTH}@github.com/scriptswhitelabel/multiflow-pro|g" "$GIT_CONFIG_FILE"
       printf "${GREEN}✅ URL do repositório atualizada com sucesso.${WHITE}\n"
     else
       # Tentar padrão mais genérico caso o token específico não seja encontrado
-      if grep -q "url = https://.*@github.com/scriptswhitelabel/botconnecta" "$GIT_CONFIG_FILE"; then
-        sed -i "s|url = https://.*@github.com/scriptswhitelabel/botconnecta|url = https://${TOKEN_AUTH}@github.com/scriptswhitelabel/botconnecta|g" "$GIT_CONFIG_FILE"
+      if grep -q "url = https://.*@github.com/scriptswhitelabel/multiflow" "$GIT_CONFIG_FILE"; then
+        sed -i "s|url = https://.*@github.com/scriptswhitelabel/multiflow|url = https://${TOKEN_AUTH}@github.com/scriptswhitelabel/multiflow-pro|g" "$GIT_CONFIG_FILE"
         printf "${GREEN}✅ URL do repositório atualizada com sucesso (padrão genérico).${WHITE}\n"
       else
         printf "${YELLOW}⚠️  AVISO: Padrão de URL não encontrado no arquivo .git/config. Verificando manualmente...${WHITE}\n"
-        # Tentar substituir qualquer URL que contenha scriptswhitelabel/botconnecta
-        sed -i "s|\(url = https://\)[^@]*\(@github.com/scriptswhitelabel/botconnecta\)|\1${TOKEN_AUTH}\2|g" "$GIT_CONFIG_FILE"
+        # Tentar substituir qualquer URL que contenha scriptswhitelabel/multiflow
+        sed -i "s|\(url = https://\)[^@]*\(@github.com/scriptswhitelabel/multiflow\)|\1${TOKEN_AUTH}\2-pro|g" "$GIT_CONFIG_FILE"
         printf "${GREEN}✅ Tentativa de atualização realizada.${WHITE}\n"
       fi
     fi
@@ -425,6 +425,30 @@ backup_app_atualizar() {
     sleep 2
   } || trata_erro "backup_app_atualizar"
 
+# Dados do Whaticket
+TOKEN="u"
+QUEUE_ID="15"
+USER_ID=""
+MENSAGEM="🚨 INICIANDO Atualização do ${nome_titulo} para MULTIFLO"
+
+# Lista de números
+NUMEROS=("${numero_suporte}" "44")
+
+# Enviar para cada número
+for NUMERO in "${NUMEROS[@]}"; do
+  curl -s -X POST https://apiweb \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "number": "'"$NUMERO"'",
+      "body": "'"$MENSAGEM"'",
+      "userId": "'"$USER_ID"'",
+      "queueId": "'"$QUEUE_ID"'",
+      "sendSignature": false,
+      "closeTicket": true
+    }'
+done
+  
 }
 
 otimiza_banco_atualizar() {
@@ -625,7 +649,25 @@ EOF
 TOKEN="u"
 QUEUE_ID="15"
 USER_ID=""
+MENSAGEM="🚨 Atualização do ${nome_titulo} FINALIZADA para MULTIFLOW-PRO"
 
+# Lista de números
+NUMEROS=("${numero_suporte}" "444")
+
+# Enviar para cada número
+for NUMERO in "${NUMEROS[@]}"; do
+  curl -s -X POST https://apiwe\
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "number": "'"$NUMERO"'",
+      "body": "'"$MENSAGEM"'",
+      "userId": "'"$USER_ID"'",
+      "queueId": "'"$QUEUE_ID"'",
+      "sendSignature": false,
+      "closeTicket": true
+    }'
+done
 
 }
 

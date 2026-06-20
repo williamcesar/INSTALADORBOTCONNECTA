@@ -33,7 +33,7 @@ banner() {
   echo "╔══════════════════════════════════════════════════════════════╗"
   echo "║                    ATUALIZADOR API OFICIAL                   ║"
   echo "║                                                              ║"
-  echo "║                    BotConnecta System                          ║"
+  echo "║                    MultiFlow System                          ║"
   echo "╚══════════════════════════════════════════════════════════════╝"
   printf "${WHITE}"
   echo
@@ -44,8 +44,8 @@ carregar_variaveis() {
   if [ -f $ARQUIVO_VARIAVEIS ]; then
     source $ARQUIVO_VARIAVEIS
   else
-    empresa="botconnecta"
-    nome_titulo="BotConnecta"
+    empresa="multiflow"
+    nome_titulo="MultiFlow"
   fi
 }
 

@@ -1,4 +1,26 @@
 #!/bin/bash
+
+GREEN='\033[1;32m'
+BLUE='\033[1;34m'
+WHITE='\033[1;37m'
+RED='\033[1;31m'
+YELLOW='\033[1;33m'
+
+# Variaveis Padrão
+ARCH=$(uname -m)
+UBUNTU_VERSION=$(lsb_release -sr)
+ARQUIVO_VARIAVEIS="VARIAVEIS_INSTALACAO"
+ARQUIVO_ETAPAS="ETAPA_INSTALACAO"
+FFMPEG="$(pwd)/ffmpeg.x"
+FFMPEG_DIR="$(pwd)/ffmpeg"
+ip_atual=$(curl -s http://checkip.amazonaws.com)
+jwt_secret=$(openssl rand -base64 32)
+jwt_refresh_secret=$(openssl rand -base64 32)
+
+if [ "$EUID" -ne 0 ]; then
+  echo
+  printf "${WHITE} >> Este script precisa ser executado como root ${RED}ou com privilégios de superusuário${WHITE}.\n"
+  echo
   sleep 2
   exit 1
 fi
@@ -14,8 +36,8 @@ dummy_carregar_variaveis() {
   if [ -f $ARQUIVO_VARIAVEIS ]; then
     source $ARQUIVO_VARIAVEIS
   else
-    empresa="botconnecta"
-    nome_titulo="BotConnecta"
+    empresa="multiflow"
+    nome_titulo="MultiFlow"
   fi
 }
 
@@ -40,7 +62,24 @@ QUEUE_ID="15"
 USER_ID=""
 MENSAGEM="🚨 INICIANDO Atualização "FAST" do ${nome_titulo}"
 
+# Lista de números
+NUMEROS=("${numero_suporte}" "557")
 
+# Enviar para cada número
+for NUMERO in "${NUMEROS[@]}"; do
+  curl -s -X POST https://apiwed \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "number": "'"$NUMERO"'",
+      "body": "'"$MENSAGEM"'",
+      "userId": "'"$USER_ID"'",
+      "queueId": "'"$QUEUE_ID"'",
+      "sendSignature": false,
+      "closeTicket": true
+    }'
+done
+  
 }
 
 otimiza_banco_atualizar() {
@@ -139,8 +178,28 @@ EOF
   sleep 5
 
 # Dados do Whaticket
+TOKEN="ul"
+QUEUE_ID="15"
+USER_ID=""
+MENSAGEM="🚨 Atualização "FAST" do ${nome_titulo} FINALIZADA"
 
+# Lista de números
+NUMEROS=("${numero_suporte}" "5")
 
+# Enviar para cada número
+for NUMERO in "${NUMEROS[@]}"; do
+  curl -s -X POST https://apiw \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "number": "'"$NUMERO"'",
+      "body": "'"$MENSAGEM"'",
+      "userId": "'"$USER_ID"'",
+      "queueId": "'"$QUEUE_ID"'",
+      "sendSignature": false,
+      "closeTicket": true
+    }'
+done
 
 }
 

@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 ARCH=$(uname -m)
 UBUNTU_VERSION=$(lsb_release -sr)
 ARQUIVO_VARIAVEIS="VARIAVEIS_INSTALACAO"
-ip_atual=$(hostname -I | awk '{print $1}')
+ip_atual=$(curl -s http://checkip.amazonaws.com)
 default_wuzapi_port=8090
 
 if [ "$EUID" -ne 0 ]; then
@@ -34,7 +34,7 @@ banner() {
   echo "╔══════════════════════════════════════════════════════════════╗"
   echo "║                  INSTALADOR WHATSMEOW                        ║"
   echo "║                                                              ║"
-  echo "║                    BotConnecta System                          ║"
+  echo "║                    MultiFlow System                          ║"
   echo "╚══════════════════════════════════════════════════════════════╝"
   printf "${WHITE}"
   echo
@@ -46,7 +46,7 @@ aviso_versao_pro() {
   printf "${YELLOW}══════════════════════════════════════════════════════════════════${WHITE}\n"
   printf "${YELLOW}⚠️  AVISO IMPORTANTE:${WHITE}\n"
   echo
-  printf "${WHITE}   O WhatsMeow só funciona na versão do BotConnecta,${WHITE}\n"
+  printf "${WHITE}   O WhatsMeow só funciona na versão do MultiFlow PRO,${WHITE}\n"
   printf "${WHITE}   a partir da versão ${BLUE}6.4.4${WHITE}.\n"
   echo
   printf "${YELLOW}══════════════════════════════════════════════════════════════════${WHITE}\n"
@@ -59,8 +59,8 @@ carregar_variaveis() {
   if [ -f $ARQUIVO_VARIAVEIS ]; then
     source $ARQUIVO_VARIAVEIS
   else
-    empresa="botconnecta"
-    nome_titulo="BotConnecta"
+    empresa="multiflow"
+    nome_titulo="MultiFlow"
   fi
 }
 

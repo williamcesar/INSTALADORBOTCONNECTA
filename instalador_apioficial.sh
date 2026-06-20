@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 ARCH=$(uname -m)
 UBUNTU_VERSION=$(lsb_release -sr)
 ARQUIVO_VARIAVEIS="VARIAVEIS_INSTALACAO"
-ip_atual=$(hostname -I | awk '{print $1}')
+ip_atual=$(curl -s http://checkip.amazonaws.com)
 default_apioficial_port=6000
 
 if [ "$EUID" -ne 0 ]; then
@@ -34,7 +34,7 @@ printf "${BLUE}"
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║                    INSTALADOR API OFICIAL                    ║"
 echo "║                                                              ║"
-echo "║                    BotConnecta System                          ║"
+echo "║                    MultiFlow System                          ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 printf "${WHITE}"
 echo
@@ -72,8 +72,8 @@ carregar_variaveis() {
 if [ -f "$ARQUIVO_VARIAVEIS" ]; then
     source "$ARQUIVO_VARIAVEIS"
 else
-    empresa="botconnecta"
-    nome_titulo="BotConnecta"
+    empresa="multiflow"
+    nome_titulo="MultiFlow"
     printf "${RED} >> ERRO: Arquivo VARIAVEIS_INSTALACAO não encontrado. Este script deve ser executado pelo instalador principal.${WHITE}\n"
     exit 1
 fi
@@ -287,7 +287,7 @@ DATABASE_USER=${empresa}
 DATABASE_PASSWORD=${senha_deploy}
 DATABASE_NAME=oficialseparado
 
-# Configurações do BotConnecta Backend (URL Completa com https://)
+# Configurações do MultiFlow Backend (URL Completa com https://)
 TOKEN_ADMIN=adminpro
 URL_BACKEND_MULT100=${backend_url_full}
 JWT_REFRESH_SECRET=${jwt_refresh_secret_backend}
@@ -300,8 +300,8 @@ URL_API_OFICIAL=${subdominio_oficial}
 
 # Configurações de Usuário Inicial
 NAME_ADMIN=SetupAutomatizado
-EMAIL_ADMIN=admin@admin.com
-PASSWORD_ADMIN=admin
+EMAIL_ADMIN=admin@multi100.com.br
+PASSWORD_ADMIN=adminpro
 EOF
 
     printf "${GREEN} >> Arquivo .env da API Oficial configurado com sucesso!${WHITE}\n"

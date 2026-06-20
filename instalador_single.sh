@@ -1,50 +1,10 @@
 #!/bin/bash
 
-# --- início: detecção dinâmica do diretório de deploy ---
-# Permite sobrepor com variáveis de ambiente:
-#   DEPLOY_ROOT  (padrão: /home/deploy)
-#   DEPLOY_DIR   (pasta exata da empresa, opcional)
-DEPLOY_ROOT=${DEPLOY_ROOT:-/home/deploy}
-
-detect_transcr_dir() {
-  # Se DEPLOY_DIR informado e válido
-  if [ -n "$DEPLOY_DIR" ] && [ -d "$DEPLOY_DIR/api_transcricao" ]; then
-    printf '%s\n' "$DEPLOY_DIR/api_transcricao"
-    return 0
-  fi
-
-  # Caso api_transcricao esteja diretamente em DEPLOY_ROOT
-  if [ -d "$DEPLOY_ROOT/api_transcricao" ]; then
-    printf '%s\n' "$DEPLOY_ROOT/api_transcricao"
-    return 0
-  fi
-
-  # Procurar qualquer subpasta em DEPLOY_ROOT que contenha api_transcricao
-  for d in "$DEPLOY_ROOT"/*; do
-    if [ -d "$d/api_transcricao" ]; then
-      # remover possível trailing slash e retornar
-      printf '%s\n' "${d%/}/api_transcricao"
-      return 0
-    fi
-  done
-
-  # Nenhum encontrado
-  return 1
-}
-
-TRANSCR_DIR=$(detect_transcr_dir) || {
-  TRANSCR_DIR=""
-  echo " >> Aviso: 'api_transcricao' não encontrada; a instalação principal continuará sem a transcrição."
-}
-# --- fim: detecção dinâmica ---
-
 GREEN='\033[1;32m'
 BLUE='\033[1;34m'
 WHITE='\033[1;37m'
 RED='\033[1;31m'
 YELLOW='\033[1;33m'
-CYAN='\033[1;36m'
-MAGENTA='\033[1;35m'
 
 # Variaveis Padrão
 ARCH=$(uname -m)
@@ -53,10 +13,9 @@ ARQUIVO_VARIAVEIS="VARIAVEIS_INSTALACAO"
 ARQUIVO_ETAPAS="ETAPA_INSTALACAO"
 FFMPEG="$(pwd)/ffmpeg.x"
 FFMPEG_DIR="$(pwd)/ffmpeg"
-ip_atual=$(hostname -I | awk '{print $1}')
+ip_atual=$(curl -s http://checkip.amazonaws.com)
 jwt_secret=$(openssl rand -base64 32)
 jwt_refresh_secret=$(openssl rand -base64 32)
-default_apioficial_port=6000
 
 if [ "$EUID" -ne 0 ]; then
   echo
@@ -67,23 +26,16 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 banner() {
-  clear
-  printf "${BLUE}"
-  printf "\n"
-  printf "${WHITE}\n"
-  printf "  ${CYAN}BotConnecta${WHITE} Por ${GREEN}William Almeida${WHITE}\n"
-  printf "  ${WHITE}Suporte: ${YELLOW}11 99023-9898${WHITE}\n"
-  printf "  ${WHITE}Versão do Instalador: ${BLUE}8.0${WHITE} (Unificado)\n"
-  printf "\n"
-  printf "  ${RED}╔══════════════════════════════════════════════════════════════╗${WHITE}\n"
-  printf "  ${RED}║${WHITE}  ${RED}⚠  AVISO LEGAL:${WHITE} Pirataria é crime (Lei 9.609/98).        ${RED}║${WHITE}\n"
-  printf "  ${RED}║${WHITE}  Este sistema é licenciado e protegido por direitos          ${RED}║${WHITE}\n"
-  printf "  ${RED}║${WHITE}  autorais. O uso não autorizado, cópia, redistribuição       ${RED}║${WHITE}\n"
-  printf "  ${RED}║${WHITE}  ou engenharia reversa é ${RED}PROIBIDO${WHITE} e sujeito a penalidades.  ${RED}║${WHITE}\n"
-  printf "  ${RED}║${WHITE}                                                              ${RED}║${WHITE}\n"
-  printf "  ${RED}║${WHITE}  ${YELLOW}📅 Data: ${CYAN}$(date '+%d/%m/%Y %H:%M:%S')${WHITE}                         ${RED}║${WHITE}\n"
-  printf "  ${RED}╚══════════════════════════════════════════════════════════════╝${WHITE}\n"
-  printf "\n"
+  printf " ${BLUE}"
+  printf "\n\n"
+  printf "██╗███╗   ██╗███████╗████████╗ █████╗ ██╗     ██╗     ███████╗██╗    ██╗██╗\n"
+  printf "██║████╗  ██║██╔════╝╚══██╔══╝██╔══██╗██║     ██║     ██╔════╝██║    ██║██║\n"
+  printf "██║██╔██╗ ██║███████    ██║   ███████║██║     ██║     ███████╗██║ █╗ ██║██║\n"
+  printf "██║██║╚██╗██║╚════██║   ██║   ██╔══██║██║     ██║     ╚════██║██║███╗██║██║\n"
+  printf "██║██║ ╚████║███████╗   ██║   ██║  ██║███████╗███████╗███████╗╚███╔███╔╝███████╗\n"
+  printf "╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝ ╚══╝╚══╝ ╚══════╝\n"
+  printf "                                INSTALADOR 6.1\n"
+  printf "\n\n"
 }
 
 # Função para manipular erros e encerrar o script
@@ -100,6 +52,7 @@ salvar_variaveis() {
   echo "email_deploy=${email_deploy}" >>$ARQUIVO_VARIAVEIS
   echo "empresa=${empresa}" >>$ARQUIVO_VARIAVEIS
   echo "senha_deploy=${senha_deploy}" >>$ARQUIVO_VARIAVEIS
+  # echo "subdominio_perfex=${subdominio_perfex}" >>$ARQUIVO_VARIAVEIS
   echo "senha_master=${senha_master}" >>$ARQUIVO_VARIAVEIS
   echo "nome_titulo=${nome_titulo}" >>$ARQUIVO_VARIAVEIS
   echo "numero_suporte=${numero_suporte}" >>$ARQUIVO_VARIAVEIS
@@ -117,13 +70,8 @@ carregar_variaveis() {
   if [ -f $ARQUIVO_VARIAVEIS ]; then
     source $ARQUIVO_VARIAVEIS
   else
-    # Extrai automaticamente o nome da empresa do TRANSCR_DIR detectado
-    if [ -n "$TRANSCR_DIR" ]; then
-      empresa=$(basename "$(dirname "$TRANSCR_DIR")")
-    else
-      empresa="wabootflow"
-    fi
-    nome_titulo="WaBootFlow"
+    empresa="multiflow"
+    nome_titulo="MultiFlow"
   fi
 }
 
@@ -194,14 +142,14 @@ verificar_arquivos_existentes() {
   fi
 }
 
-# Função para instalar API WhatsMeow
+# Função para instalar API What
 instalar_whatsmeow() {
   banner
   printf "${YELLOW}══════════════════════════════════════════════════════════════════${WHITE}\n"
   printf "${YELLOW}⚠️  ATENÇÃO:${WHITE}\n"
   echo
   printf "${WHITE}   A WhatsMeow é uma API Alternativa à Bayles, muito estável.${WHITE}\n"
-  printf "${WHITE}   Ela está disponível apenas para a versão do BotConnecta${WHITE}\n"
+  printf "${WHITE}   Ela está disponível apenas para a versão do MultiFlow PRO${WHITE}\n"
   printf "${WHITE}   - A partir da Versão ${BLUE}6.4.4${WHITE}.${WHITE}\n"
   echo
   printf "${YELLOW}══════════════════════════════════════════════════════════════════${WHITE}\n"
@@ -219,10 +167,11 @@ instalar_whatsmeow() {
   fi
   
   banner
-  printf "${WHITE} >> Digite o TOKEN de autorização do GitHub para acesso ao repositório botconnecta:${WHITE}\n"
+  printf "${WHITE} >> Digite o TOKEN de autorização do GitHub para acesso ao repositório multiflow-pro:${WHITE}\n"
   echo
   read -p "> " TOKEN_AUTH
   
+  # Verificar se o token foi informado
   if [ -z "$TOKEN_AUTH" ]; then
     printf "${RED}❌ ERRO: Token de autorização não pode estar vazio.${WHITE}\n"
     sleep 2
@@ -232,19 +181,23 @@ instalar_whatsmeow() {
   printf "${BLUE} >> Token de autorização recebido. Validando...${WHITE}\n"
   echo
   
+  # Validar o token usando a mesma lógica do atualizador_pro.sh
   INSTALADOR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   TEST_DIR="${INSTALADOR_DIR}/test_clone_$(date +%s)"
-  REPO_URL="https://${TOKEN_AUTH}@github.com/scriptswhitelabel/botconnecta.git"
+  REPO_URL="https://${TOKEN_AUTH}@github.com/scriptswhitelabel/m.git"
   
   printf "${WHITE} >> Validando token com teste de git clone...\n"
   echo
   
+  # Tentar fazer clone de teste
   if git clone --depth 1 "${REPO_URL}" "${TEST_DIR}" >/dev/null 2>&1; then
+    # Clone bem-sucedido, remover diretório de teste
     rm -rf "${TEST_DIR}" >/dev/null 2>&1
     printf "${GREEN}✅ Token validado com sucesso! Git clone funcionou corretamente.${WHITE}\n"
     echo
     sleep 2
     
+    # Executar o instalador WhatsMeow
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     WHATSMEOW_SCRIPT="${SCRIPT_DIR}/instalador_whatsmeow.sh"
     
@@ -261,17 +214,21 @@ instalar_whatsmeow() {
       sleep 3
     fi
   else
+    # Clone falhou, token inválido
     rm -rf "${TEST_DIR}" >/dev/null 2>&1
     printf "${RED}══════════════════════════════════════════════════════════════════${WHITE}\n"
     printf "${RED}❌ ERRO: Token de autorização inválido!${WHITE}\n"
     echo
-    printf "${RED}   O teste de git clone falhou. O token informado não tem acesso ao repositório botconnecta.${WHITE}\n"
+    printf "${RED}   O teste de git clone falhou. O token informado não tem acesso ao repositório multiflow-pro.${WHITE}\n"
     echo
     printf "${YELLOW}   ⚠️  IMPORTANTE:${WHITE}\n"
-    printf "${YELLOW}   O BotConnecta é um projeto fechado e requer autorização especial.${WHITE}\n"
-    printf "${YELLOW}   Para solicitar acesso, entre em contato com o suporte:${WHITE}\n"
+    printf "${YELLOW}   O .${WHITE}\n"
+    printf "${YELLOW}   Para solicitar acesso ou analisar a disponibilidade,${WHITE}\n"
+    printf "${YELLOW}   entre em contato com o suporte:${WHITE}\n"
     echo
-    printf "${BLUE}   📱 WhatsApp: ${WHITE}81 99998-8876${WHITE}\n"
+    printf "${BLUE}   📱 WhatsApp:${WHITE}\n"
+    printf "${WHITE}   • https://wa.me/55${WHITE}\n"
+    printf "${WHITE}   • https://wa.me/558${WHITE}\n"
     echo
     printf "${RED}   Instalação interrompida.${WHITE}\n"
     printf "${RED}══════════════════════════════════════════════════════════════════${WHITE}\n"
@@ -344,10 +301,11 @@ menu() {
     banner
     printf "${WHITE} Selecione abaixo a opção desejada: \n"
     echo
-    printf "   [${BLUE}1${WHITE}] Instalar ${nome_titulo} ${CYAN}(Backend + Frontend)${WHITE}\n"
-    printf "   [${BLUE}2${WHITE}] Instalar API Oficial ${YELLOW}(WhatsApp Business)${WHITE}\n"
-    printf "   [${BLUE}3${WHITE}] Instalar Transcrição de Áudio ${YELLOW}(API Python)${WHITE}\n"
-    printf "   [${BLUE}4${WHITE}] Atualizar/Reparar sistema ${YELLOW}(retomar o que faltou)${WHITE}\n"
+    printf "   [${BLUE}1${WHITE}] Instalar ${nome_titulo}\n"
+    printf "   [${BLUE}2${WHITE}] Atualizar ${nome_titulo}\n"
+    printf "   [${BLUE}3${WHITE}] Instalar Transcrição de Audio Nativa\n"
+    printf "   [${BLUE}4${WHITE}] Instalar API Oficial\n"
+    printf "   [${BLUE}5${WHITE}] Atualizar API Oficial\n"
     printf "   [${BLUE}0${WHITE}] Sair\n"
     echo
     read -p "> " option
@@ -356,13 +314,22 @@ menu() {
       verificar_arquivos_existentes
       ;;
     2)
-      instalar_api_oficial_separado
+      atualizar_base
       ;;
     3)
       instalar_transcricao_audio_nativa
       ;;
     4)
-      atualizar_base
+      instalar_api_oficial
+      ;;
+    5)
+      atualizar_api_oficial
+      ;;
+    6)
+      migrar
+      ;;
+    10)
+      menu
       ;;
     0)
       sair
@@ -375,7 +342,7 @@ menu() {
   done
 }
 
-# Etapa de instalação (inclui API Oficial integrada)
+# Etapa de instalação
 instalacao_base() {
   carregar_etapa
   if [ "$etapa" == "0" ]; then
@@ -481,410 +448,16 @@ instalacao_base() {
   fi
 }
 
-# Verifica se o backend está realmente online
-backend_instalado_ok() {
-  [ -f "/home/deploy/${empresa}/backend/dist/server.js" ] && sudo su - deploy -c "pm2 list | grep -q '${empresa}-backend.*online'" >/dev/null 2>&1
-}
-
-# Verifica se o frontend está realmente online
-frontend_instalado_ok() {
-  [ -f "/home/deploy/${empresa}/frontend/build/index.html" ] && sudo su - deploy -c "pm2 list | grep -q '${empresa}-frontend.*online'" >/dev/null 2>&1
-}
-
-# Verifica se o certificado SSL já existe
-ssl_instalado_ok() {
-  local domain="$1"
-  [ -f "/etc/letsencrypt/live/${domain}/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/${domain}/privkey.pem" ]
-}
-
-corrige_build_backend_base() {
-  local target_file="/home/deploy/${empresa}/backend/src/services/MessageServices/TranscribeAudioMessageService.ts"
-  if [ -f "$target_file" ]; then
-    sed -i "s|contentType: audioResponse.headers\['content-type'\] || 'audio/ogg'|contentType: String(audioResponse.headers['content-type'] || 'audio/ogg')|g" "$target_file"
-  fi
-}
-
-# Etapa de atualização / reparo
+# Etapa de instalação
 atualizar_base() {
-  carregar_variaveis
-  carregar_etapa
-
-  if [ "$etapa" -gt 0 ] && [ "$etapa" -lt 21 ]; then
-    banner
-    printf "${YELLOW} >> Instalação interrompida detectada na etapa ${etapa}. Retomando de onde parou...${WHITE}\n"
-    sleep 2
-    instalacao_base
-    return 0
-  fi
-
-  banner
-  printf "${WHITE} >> Verificando componentes já instalados e reparando apenas o que estiver faltando...\n"
-  echo
-
-  if ! backend_instalado_ok; then
-    printf "${YELLOW} >> Backend ausente ou offline. Reexecutando a instalação do backend...${WHITE}\n"
-    corrige_build_backend_base
-    instala_backend_base || trata_erro "instala_backend_base"
-  fi
-
-  if ! frontend_instalado_ok; then
-    printf "${YELLOW} >> Frontend ausente ou offline. Reexecutando a instalação do frontend...${WHITE}\n"
-    instala_frontend_base || trata_erro "instala_frontend_base"
-  fi
-
-  if [ "${proxy}" = "nginx" ]; then
-    config_nginx_base || trata_erro "config_nginx_base"
-  elif [ "${proxy}" = "traefik" ]; then
-    config_traefik_base || trata_erro "config_traefik_base"
-  fi
-
-  salvar_etapa 21
-  banner
-  printf "${GREEN} >> Atualização/reparo concluído. Apenas o que faltava foi instalado.${WHITE}\n"
-  sleep 2
+  backup_app_atualizar || trata_erro "backup_app_atualizar"
+  instala_ffmpeg_base || trata_erro "instala_ffmpeg_base"
+  config_cron_base || trata_erro "config_cron_base"
+  baixa_codigo_atualizar || trata_erro "baixa_codigo_atualizar"
 }
 
 sair() {
   exit 0
-}
-
-################################################################
-#                    API OFICIAL - INTEGRADA                    #
-################################################################
-
-# Reparo de Nginx para API Oficial
-reparo_nginx_apioficial() {
-  printf "${YELLOW} >> Verificando configuração do Nginx para API Oficial...${WHITE}\n"
-  sudo rm -f /etc/nginx/sites-enabled/-oficial 2>/dev/null
-  sudo rm -f /etc/nginx/sites-available/-oficial 2>/dev/null
-  sudo sed -i '/include \/etc\/nginx\/sites-enabled\/-oficial;/d' /etc/nginx/nginx.conf 2>/dev/null
-}
-
-# Solicitar subdomínio da API Oficial
-solicitar_dados_apioficial() {
-  local temp_subdominio_oficial
-  banner
-  printf "${WHITE} >> Insira o subdomínio da API Oficial (Ex: api.seusistema.com.br): \n"
-  echo
-  read -p "> " temp_subdominio_oficial
-  echo
-  subdominio_oficial=$(echo "${temp_subdominio_oficial}" | sed 's|https://||g' | sed 's|http://||g' | cut -d'/' -f1)
-  echo "subdominio_oficial=${subdominio_oficial}" >>$ARQUIVO_VARIAVEIS
-}
-
-# Verificar DNS da API Oficial
-verificar_dns_apioficial() {
-  banner
-  printf "${WHITE} >> Verificando o DNS do subdomínio: ${subdominio_oficial}...\n"
-  echo
-  if ! command -v dig &> /dev/null; then
-    sudo apt-get update >/dev/null 2>&1
-    sudo apt-get install dnsutils -y >/dev/null 2>&1
-  fi
-  local resolved_ip=$(dig +short ${subdominio_oficial} @8.8.8.8)
-  if [[ "${resolved_ip}" != "${ip_atual}"* ]] || [ -z "${resolved_ip}" ]; then
-    printf "${YELLOW} >> AVISO: DNS de ${subdominio_oficial} não aponta para este IP (${ip_atual}).${WHITE}\n"
-    printf "${WHITE} >> IP resolvido: ${resolved_ip:-nenhum}${WHITE}\n"
-    echo
-    printf "${WHITE} >> Deseja continuar mesmo assim? (S/N): ${WHITE}\n"
-    read -p "> " continuar_dns_api
-    continuar_dns_api=$(echo "${continuar_dns_api}" | tr '[:lower:]' '[:upper:]')
-    if [ "${continuar_dns_api}" != "S" ]; then
-      printf "${RED} >> Instalação da API Oficial cancelada. Configure o DNS e tente novamente.${WHITE}\n"
-      sleep 3
-      return 1
-    fi
-  else
-    printf "${GREEN} >> DNS OK! ${subdominio_oficial} aponta para ${ip_atual}${WHITE}\n"
-    sleep 2
-  fi
-}
-
-# Configurar Nginx para API Oficial
-configurar_nginx_apioficial() {
-  banner
-  printf "${WHITE} >> Configurando Nginx para API Oficial...\n"
-  echo
-  local sites_available_path="/etc/nginx/sites-available/${empresa}-oficial"
-  local sites_enabled_link="/etc/nginx/sites-enabled/${empresa}-oficial"
-
-  sudo rm -f "${sites_enabled_link}" 2>/dev/null
-  sudo rm -f "${sites_available_path}" 2>/dev/null
-
-  sudo bash -c "cat > ${sites_available_path} << 'END'
-upstream oficial {
-    server 127.0.0.1:${default_apioficial_port};
-    keepalive 32;
-}
-server {
-    server_name ${subdominio_oficial};
-    location / {
-        proxy_pass http://oficial;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_cache_bypass \$http_upgrade;
-    }
-}
-END"
-  sudo ln -sf ${sites_available_path} ${sites_enabled_link}
-  
-  # Testa configuração antes de recarregar
-  if sudo nginx -t 2>/dev/null; then
-    sudo systemctl reload nginx
-    printf "${GREEN} >> Nginx configurado com sucesso!${WHITE}\n"
-  else
-    printf "${RED} >> ERRO: Configuração do Nginx inválida. Verifique manualmente.${WHITE}\n"
-    return 1
-  fi
-  sleep 2
-
-  # SSL
-  printf "${WHITE} >> Emitindo certificado SSL para ${subdominio_oficial}...${WHITE}\n"
-  if ssl_instalado_ok "${subdominio_oficial}"; then
-    printf "${GREEN} >> SSL já existe para ${subdominio_oficial}. Pulando emissão.${WHITE}\n"
-  else
-    sudo certbot -m "${email_deploy}" --nginx --agree-tos --expand -n -d "${subdominio_oficial}" || {
-      printf "${YELLOW} >> Aviso: Falha no SSL. Tente manualmente: certbot --nginx -d ${subdominio_oficial}${WHITE}\n"
-      sleep 3
-      return 1
-    }
-  fi
-}
-
-# Criar banco da API Oficial
-criar_banco_apioficial() {
-  banner
-  printf "${WHITE} >> Criando banco de dados 'oficialseparado'...\n"
-  echo
-  # Verifica se o banco já existe
-  if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "oficialseparado"; then
-    printf "${YELLOW} >> Banco 'oficialseparado' já existe. Pulando criação...${WHITE}\n"
-  else
-    sudo -u postgres psql -c "CREATE DATABASE oficialseparado WITH OWNER ${empresa};" || {
-      printf "${RED} >> Erro ao criar banco. Verifique se o usuário ${empresa} existe no PostgreSQL.${WHITE}\n"
-      return 1
-    }
-    printf "${GREEN} >> Banco 'oficialseparado' criado com sucesso!${WHITE}\n"
-  fi
-  sleep 2
-}
-
-# Configurar .env da API Oficial
-configurar_env_apioficial() {
-  banner
-  printf "${WHITE} >> Configurando .env da API Oficial...\n"
-  echo
-  local backend_env_path="/home/deploy/${empresa}/backend/.env"
-  local jwt_refresh_secret_backend=""
-  local backend_url_full=""
-  
-  if [ -f "${backend_env_path}" ]; then
-    jwt_refresh_secret_backend=$(grep "^JWT_REFRESH_SECRET=" "${backend_env_path}" | cut -d '=' -f2- | tr -d '\r')
-    backend_url_full=$(grep "^BACKEND_URL=" "${backend_env_path}" | cut -d '=' -f2- | tr -d '\r')
-  else
-    printf "${YELLOW} >> Aviso: .env do backend não encontrado. Usando valores padrão.${WHITE}\n"
-    jwt_refresh_secret_backend="${jwt_refresh_secret}"
-    backend_url_full="https://${subdominio_backend}"
-  fi
-  
-  local api_oficial_dir="/home/deploy/${empresa}/api_oficial"
-  mkdir -p "${api_oficial_dir}"
-  
-  sudo -u deploy bash -c "cat > ${api_oficial_dir}/.env <<EOF
-DATABASE_LINK=postgresql://${empresa}:${senha_deploy}@localhost:5432/oficialseparado?schema=public
-DATABASE_URL=localhost
-DATABASE_PORT=5432
-DATABASE_USER=${empresa}
-DATABASE_PASSWORD=${senha_deploy}
-DATABASE_NAME=oficialseparado
-TOKEN_ADMIN=adminpro
-URL_BACKEND_MULT100=${backend_url_full}
-JWT_REFRESH_SECRET=${jwt_refresh_secret_backend}
-REDIS_URI=redis://:${senha_deploy}@127.0.0.1:6379
-PORT=${default_apioficial_port}
-URL_API_OFICIAL=${subdominio_oficial}
-NAME_ADMIN=SetupAutomatizado
-EMAIL_ADMIN=admin@multi100.com.br
-PASSWORD_ADMIN=adminpro
-EOF"
-  printf "${GREEN} >> .env da API Oficial configurado!${WHITE}\n"
-  sleep 2
-}
-
-# Instalar dependências e build da API Oficial
-build_apioficial() {
-  banner
-  printf "${WHITE} >> Instalando dependências e compilando API Oficial...\n"
-  echo
-  local api_oficial_dir="/home/deploy/${empresa}/api_oficial"
-  
-  if [ ! -d "${api_oficial_dir}" ]; then
-    printf "${RED} >> Diretório da API Oficial não encontrado: ${api_oficial_dir}${WHITE}\n"
-    printf "${YELLOW} >> Verifique se o repositório foi clonado corretamente.${WHITE}\n"
-    return 1
-  fi
-  
-  sudo su - deploy <<INSTALL_API
-  # Configura PATH
-  if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
-    export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:\$PATH
-  else
-    export PATH=/usr/bin:/usr/local/bin:\$PATH
-  fi
-  
-  cd ${api_oficial_dir}
-  
-  if [ ! -f "package.json" ]; then
-    echo "ERRO: package.json não encontrado em ${api_oficial_dir}"
-    exit 1
-  fi
-  
-  npm install --force
-  npx prisma generate
-  npm run build
-  npx prisma migrate deploy
-  pm2 start dist/main.js --name=api_oficial
-  pm2 save
-INSTALL_API
-
-  if [ $? -ne 0 ]; then
-    printf "${RED} >> Erro durante a instalação da API Oficial.${WHITE}\n"
-    return 1
-  fi
-  
-  printf "${GREEN} >> API Oficial compilada e iniciada com sucesso!${WHITE}\n"
-  sleep 2
-}
-
-# Atualizar .env do backend para vincular API Oficial
-vincular_apioficial_backend() {
-  banner
-  printf "${WHITE} >> Vinculando API Oficial ao Backend...\n"
-  echo
-  local backend_env_path="/home/deploy/${empresa}/backend/.env"
-  
-  if [ ! -f "${backend_env_path}" ]; then
-    printf "${RED} >> .env do backend não encontrado. Pulando vinculação.${WHITE}\n"
-    return 0
-  fi
-  
-  sudo sed -i 's|^USE_WHATSAPP_OFICIAL=.*|USE_WHATSAPP_OFICIAL=true|' "${backend_env_path}"
-  if grep -q "^URL_API_OFICIAL=" "${backend_env_path}"; then
-    sudo sed -i "s|^URL_API_OFICIAL=.*|URL_API_OFICIAL=https://${subdominio_oficial}|" "${backend_env_path}"
-  else
-    echo "URL_API_OFICIAL=https://${subdominio_oficial}" | sudo tee -a "${backend_env_path}" >/dev/null
-  fi
-  
-  # Restart backend
-  sudo su - deploy <<'RESTART_BACKEND'
-  if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
-    export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:$PATH
-  else
-    export PATH=/usr/bin:/usr/local/bin:$PATH
-  fi
-  pm2 reload all
-RESTART_BACKEND
-
-  printf "${GREEN} >> Backend vinculado à API Oficial!${WHITE}\n"
-  sleep 2
-}
-
-# ═══ INSTALAÇÃO DA API OFICIAL INTEGRADA (chamada durante instalacao_base) ═══
-instalar_api_oficial_integrada() {
-  banner
-  printf "${CYAN}══════════════════════════════════════════════════════════════════${WHITE}\n"
-  printf "${CYAN}   📡 INSTALAÇÃO DA API OFICIAL (WhatsApp Business)${WHITE}\n"
-  printf "${CYAN}══════════════════════════════════════════════════════════════════${WHITE}\n"
-  echo
-  printf "${WHITE} >> Deseja instalar a API Oficial agora? (S/N): ${WHITE}\n"
-  echo
-  read -p "> " instalar_api_agora
-  instalar_api_agora=$(echo "${instalar_api_agora}" | tr '[:lower:]' '[:upper:]')
-  
-  if [ "${instalar_api_agora}" != "S" ]; then
-    printf "${YELLOW} >> API Oficial não será instalada agora. Você pode instalá-la depois pelo menu.${WHITE}\n"
-    sleep 2
-    return 0
-  fi
-  
-  reparo_nginx_apioficial
-  solicitar_dados_apioficial
-  verificar_dns_apioficial || return 0
-  
-  if [ "${proxy}" == "nginx" ]; then
-    configurar_nginx_apioficial || return 1
-  fi
-  
-  criar_banco_apioficial || return 1
-  configurar_env_apioficial || return 1
-  build_apioficial || return 1
-  vincular_apioficial_backend
-  
-  sudo systemctl restart nginx 2>/dev/null
-  
-  printf "${GREEN}══════════════════════════════════════════════════════════════════${WHITE}\n"
-  printf "${GREEN}   ✅ API Oficial instalada com sucesso!${WHITE}\n"
-  printf "${GREEN}   🌐 URL: https://${subdominio_oficial}${WHITE}\n"
-  printf "${GREEN}══════════════════════════════════════════════════════════════════${WHITE}\n"
-  sleep 3
-}
-
-# ═══ INSTALAÇÃO SEPARADA DA API OFICIAL (menu opção 4) ═══
-instalar_api_oficial_separado() {
-  banner
-  printf "${WHITE} >> Instalando API Oficial (modo separado)...\n"
-  echo
-  
-  carregar_variaveis
-  
-  # Carregar subdomínio do backend se não existir
-  if [ -z "${subdominio_backend}" ]; then
-    local backend_env_path="/home/deploy/${empresa}/backend/.env"
-    if [ -f "${backend_env_path}" ]; then
-      local subdominio_backend_full=$(grep "^BACKEND_URL=" "${backend_env_path}" 2>/dev/null | cut -d '=' -f2- | tr -d '\r')
-      subdominio_backend=$(echo "${subdominio_backend_full}" | sed 's|https://||g' | sed 's|http://||g' | cut -d'/' -f1)
-    fi
-  fi
-  
-  # Carregar email e senha do backend se não existir
-  if [ -z "${email_deploy}" ] || [ -z "${senha_deploy}" ]; then
-    local backend_env_path="/home/deploy/${empresa}/backend/.env"
-    if [ -f "${backend_env_path}" ]; then
-      [ -z "${senha_deploy}" ] && senha_deploy=$(grep "^DB_PASS=" "${backend_env_path}" | cut -d '=' -f2- | tr -d '\r')
-      [ -z "${email_deploy}" ] && email_deploy=$(grep "^USER_EMAIL=" "${backend_env_path}" | cut -d '=' -f2- | tr -d '\r')
-      
-      if [ -z "${email_deploy}" ]; then
-        printf "${WHITE} >> Digite seu email para o certificado SSL: \n"
-        read -p "> " email_deploy
-      fi
-    else
-      printf "${RED} >> ERRO: .env do backend não encontrado em ${backend_env_path}${WHITE}\n"
-      sleep 3
-      return 1
-    fi
-  fi
-  
-  reparo_nginx_apioficial
-  solicitar_dados_apioficial
-  verificar_dns_apioficial || return 0
-  configurar_nginx_apioficial || return 1
-  criar_banco_apioficial || return 1
-  configurar_env_apioficial || return 1
-  build_apioficial || return 1
-  vincular_apioficial_backend
-  
-  sudo systemctl restart nginx 2>/dev/null
-  
-  banner
-  printf "${GREEN} >> Instalação da API Oficial concluída! https://${subdominio_oficial}${WHITE}\n"
-  echo
-  printf "${GREEN} >> Pressione Enter para voltar ao menu...${WHITE}\n"
-  read -r
 }
 
 ################################################################
@@ -893,11 +466,13 @@ instalar_api_oficial_separado() {
 
 # Questões base
 questoes_dns_base() {
+  # ARMAZENA URL BACKEND
   banner
   printf "${WHITE} >> Insira a URL do Backend: \n"
   echo
   read -p "> " subdominio_backend
   echo
+  # ARMAZENA URL FRONTEND
   banner
   printf "${WHITE} >> Insira a URL do Frontend: \n"
   echo
@@ -965,52 +540,68 @@ verificar_dns_base() {
 }
 
 questoes_variaveis_base() {
+  # DEFINE EMAIL
   banner
   printf "${WHITE} >> Digite o seu melhor email: \n"
   echo
   read -p "> " email_deploy
   echo
+  # DEFINE NOME DA EMPRESA
   banner
   printf "${WHITE} >> Digite o nome da sua empresa (Letras minusculas e sem espaço): \n"
   echo
   read -p "> " empresa
   echo
+  # DEFINE SENHA BASE
   banner
   printf "${WHITE} >> Insira a senha para o usuario Deploy, Redis e Banco de Dados ${RED}IMPORTANTE${WHITE}: Não utilizar caracteres especiais\n"
   echo
   read -p "> " senha_deploy
   echo
+  # ARMAZENA URL BACKEND
+  # banner
+  # printf "${WHITE} >> Insira a URL do PerfexCRM: \n"
+  # echo
+  # read -p "> " subdominio_perfex
+  echo
+  # DEFINE SENHA MASTER
   banner
   printf "${WHITE} >> Insira a senha para o MASTER: \n"
   echo
   read -p "> " senha_master
   echo
+  # DEFINE TITULO DO APP NO NAVEGADOR
   banner
   printf "${WHITE} >> Insira o Titulo da Aplicação (Permitido Espaço): \n"
   echo
   read -p "> " nome_titulo
   echo
+  # DEFINE TELEFONE SUPORTE
   banner
   printf "${WHITE} >> Digite o numero de telefone para suporte: \n"
   echo
   read -p "> " numero_suporte
   echo
+  # DEFINE FACEBOOK_APP_ID
   banner
   printf "${WHITE} >> Digite o FACEBOOK_APP_ID caso tenha: \n"
   echo
   read -p "> " facebook_app_id
   echo
+  # DEFINE FACEBOOK_APP_SECRET
   banner
   printf "${WHITE} >> Digite o FACEBOOK_APP_SECRET caso tenha: \n"
   echo
   read -p "> " facebook_app_secret
   echo
+  # DEFINE TOKEN GITHUB
   banner
   printf "${WHITE} >> Digite seu TOKEN de acesso pessoal do GitHub: \n"
   printf "${WHITE} >> Passo a Passo para gerar o seu TOKEN no link ${BLUE}https://bit.ly/token-github ${WHITE} \n"
   echo
   read -p "> " github_token
   echo
+  # DEFINE LINK REPO GITHUB
   banner
   printf "${WHITE} >> Digite a URL do repositório privado no GitHub: \n"
   echo
@@ -1089,10 +680,11 @@ define_portas_base() {
 dados_instalacao_base() {
   printf "   ${WHITE}Anote os dados abaixo\n\n"
   printf "   ${WHITE}Subdominio Backend: ---->> ${YELLOW}${subdominio_backend}\n"
-  printf "   ${WHITE}Subdominio Frontend: --->> ${YELLOW}${subdominio_frontend}\n"
+  printf "   ${WHITE}Subdominiio Frontend: -->> ${YELLOW}${subdominio_frontend}\n"
   printf "   ${WHITE}Seu Email: ------------->> ${YELLOW}${email_deploy}\n"
   printf "   ${WHITE}Nome da Empresa: ------->> ${YELLOW}${empresa}\n"
   printf "   ${WHITE}Senha Deploy: ---------->> ${YELLOW}${senha_deploy}\n"
+  # printf "   ${WHITE}Subdominio Perfex: ----->> ${YELLOW}${subdominio_perfex}\n"
   printf "   ${WHITE}Senha Master: ---------->> ${YELLOW}${senha_master}\n"
   printf "   ${WHITE}Titulo da Aplicação: --->> ${YELLOW}${nome_titulo}\n"
   printf "   ${WHITE}Numero de Suporte: ----->> ${YELLOW}${numero_suporte}\n"
@@ -1242,6 +834,7 @@ instala_ffmpeg_base() {
 
     {
       sudo apt install ffmpeg -y
+      # Dynamic fetch of latest FFmpeg build from BtbN/FFmpeg-Builds
       download_ok=false
       asset_url=""
       if [ "${ARCH}" = "x86_64" ]; then
@@ -1292,7 +885,7 @@ instala_postgres_base() {
   {
     sudo su - root <<EOF
   sudo apt-get install gnupg -y
-  sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt \$(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+  sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
   wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
   sudo apt-get update -y && sudo apt-get -y install postgresql-17
 EOF
@@ -1303,19 +896,21 @@ EOF
 # Instala NodeJS
 instala_node_base() {
   banner
-  printf "${WHITE} >> Instalando nodejs...\n"
-  echo
+ printf "${WHITE} >> Instalando nodejs...\n"
+ echo
   {
     sudo su - root <<'NODEINSTALL'
-    # Remove repositórios antigos do NodeSource
+    # Remove repositórios antigos do NodeSource que podem estar causando problemas
     rm -f /etc/apt/sources.list.d/nodesource.list 2>/dev/null
     rm -f /etc/apt/sources.list.d/nodesource*.list 2>/dev/null
     
-    printf " >> Tentando instalar Node.js 22.x LTS...\n"
+    # Tenta primeiro com Node.js 22.x (LTS atual disponível no repositório oficial)
+    printf " >> Tentando instalar Node.js 22.x LTS (repositório oficial)...\n"
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - 2>&1 | grep -v "does not have a Release file" || {
       printf " >> Node.js 22.x não disponível. Tentando Node.js 20.x...\n"
       curl -fsSL https://deb.nodesource.com/setup_20.x | bash - 2>&1 | grep -v "does not have a Release file" || {
         printf " >> Erro ao configurar repositório. Tentando método alternativo...\n"
+        # Método alternativo: baixa e executa o script manualmente
         curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh 2>/dev/null || \
         curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/nodesource_setup.sh
         bash /tmp/nodesource_setup.sh 2>&1 | grep -v "does not have a Release file" || {
@@ -1325,43 +920,53 @@ instala_node_base() {
       }
     }
     
+    # Atualiza lista de pacotes (ignorando erros de outros repositórios)
     printf " >> Atualizando lista de pacotes...\n"
     apt-get update -y 2>&1 | grep -v "does not have a Release file" | grep -v "Key is stored in legacy" || true
     
+    # Instala Node.js
     printf " >> Instalando Node.js...\n"
     apt-get install -y nodejs || {
       printf " >> Erro ao instalar Node.js via apt.\n"
       exit 1
     }
     
+    # Verifica se Node.js foi instalado
     if ! command -v node &> /dev/null; then
       printf " >> Erro: Node.js não foi encontrado no PATH após instalação.\n"
+      printf " >> Verificando localização...\n"
       find /usr -name node -type f 2>/dev/null | head -5
       exit 1
     fi
     
+    # Verifica se npm está disponível
     if ! command -v npm &> /dev/null; then
       printf " >> Erro: npm não foi encontrado no PATH após instalação.\n"
+      printf " >> Verificando localização...\n"
       find /usr -name npm -type f 2>/dev/null | head -5
       exit 1
     fi
     
+    # Mostra versões instaladas
     printf " >> Node.js instalado: "
     node --version
     printf " >> npm instalado: "
     npm --version
     
+    # Instala o gerenciador de versões 'n' e configura a versão específica 20.19.4
     printf " >> Instalando gerenciador de versões 'n'...\n"
     npm install -g n || {
       printf " >> Aviso: Não foi possível instalar 'n'. Continuando com versão padrão.\n"
     }
     
+    # Tenta instalar versão específica se 'n' foi instalado
     if command -v n &> /dev/null; then
       printf " >> Configurando Node.js versão 20.19.4...\n"
       n 20.19.4 || {
         printf " >> Aviso: Não foi possível instalar versão específica. Usando versão padrão.\n"
       }
       
+      # Garante que os binários estão no PATH do sistema
       if [ -f /usr/local/n/versions/node/20.19.4/bin/node ]; then
         ln -sf /usr/local/n/versions/node/20.19.4/bin/node /usr/bin/node
         ln -sf /usr/local/n/versions/node/20.19.4/bin/npm /usr/bin/npm
@@ -1369,6 +974,7 @@ instala_node_base() {
       fi
     fi
     
+    # Cria links simbólicos para garantir acesso global
     NODE_BIN=$(which node 2>/dev/null || find /usr -name node -type f 2>/dev/null | head -1)
     NPM_BIN=$(which npm 2>/dev/null || find /usr -name npm -type f 2>/dev/null | head -1)
     
@@ -1380,18 +986,21 @@ instala_node_base() {
       ln -sf "$NPM_BIN" /usr/bin/npm
     fi
     
+    # Atualiza o PATH no perfil do sistema
     if ! grep -q "/usr/local/n/versions/node" /etc/profile 2>/dev/null; then
       echo 'export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:$PATH' >> /etc/profile
     fi
     
+    # Atualiza o PATH no bashrc do root e deploy
     for user_home in /root /home/deploy; do
       if [ -d "$user_home" ]; then
-        if ! grep -q "/usr/local/n/versions/node" "${user_home}/.bashrc" 2>/dev/null; then
-          echo 'export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:$PATH' >> "${user_home}/.bashrc"
+        if ! grep -q "/usr/local/n/versions/node" "$user_home/.bashrc" 2>/dev/null; then
+          echo 'export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:$PATH' >> "$user_home/.bashrc"
         fi
       fi
     done
     
+    # Verifica novamente se node e npm estão disponíveis
     printf " >> Verificando instalação final...\n"
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:$PATH
     node --version || exit 1
@@ -1424,38 +1033,55 @@ instala_pm2_base() {
   
   {
     sudo su - root <<'PM2INSTALL'
+    # Configura PATH para incluir Node.js
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:$PATH
     
+    # Tenta encontrar node em vários locais possíveis
     NODE_BIN=""
     if command -v node &> /dev/null; then
       NODE_BIN=$(which node)
+      printf " >> Node.js encontrado em: $NODE_BIN\n"
     elif [ -f /usr/local/n/versions/node/20.19.4/bin/node ]; then
       NODE_BIN="/usr/local/n/versions/node/20.19.4/bin/node"
       export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:$PATH
+      printf " >> Node.js encontrado em: $NODE_BIN\n"
     elif [ -f /usr/bin/node ]; then
       NODE_BIN="/usr/bin/node"
+      printf " >> Node.js encontrado em: $NODE_BIN\n"
     else
-      printf " >> ERRO: Node.js não está instalado.\n"
+      printf " >> ERRO: Node.js não está instalado ou não foi encontrado no sistema.\n"
+      printf " >> Procurando Node.js no sistema...\n"
       find /usr -name node -type f 2>/dev/null | head -5
       exit 1
     fi
     
+    # Verifica npm
     if ! command -v npm &> /dev/null; then
-      printf " >> ERRO: npm não está instalado.\n"
+      printf " >> ERRO: npm não está instalado ou não foi encontrado no sistema.\n"
+      printf " >> Procurando npm no sistema...\n"
+      find /usr -name npm -type f 2>/dev/null | head -5
       exit 1
     fi
     
+    # Mostra versões
+    printf " >> Versão do Node.js: "
     node --version || exit 1
+    printf " >> Versão do npm: "
     npm --version || exit 1
     
+    # Instala PM2 globalmente
+    printf " >> Instalando PM2...\n"
     npm install -g pm2 || {
-      printf " >> Erro ao instalar PM2.\n"
+      printf " >> Erro ao instalar PM2. Tentando com sudo...\n"
       exit 1
     }
     
+    # Verifica se PM2 foi instalado
     if ! command -v pm2 &> /dev/null; then
+      printf " >> PM2 não encontrado no PATH. Procurando...\n"
       PM2_BIN=$(find /usr -name pm2 -type f 2>/dev/null | head -1)
       if [ -n "$PM2_BIN" ]; then
+        printf " >> PM2 encontrado em: $PM2_BIN\n"
         ln -sf "$PM2_BIN" /usr/bin/pm2 2>/dev/null || true
       else
         printf " >> ERRO: PM2 não foi instalado corretamente\n"
@@ -1463,14 +1089,20 @@ instala_pm2_base() {
       fi
     fi
     
+    printf " >> PM2 instalado com sucesso!\n"
     pm2 --version || exit 1
     
+    # Configura o PM2 para iniciar automaticamente
+    printf " >> Configurando PM2 para iniciar automaticamente...\n"
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:$PATH
     
+    # Garante que o usuário deploy existe
     if id "deploy" &>/dev/null; then
       pm2 startup ubuntu -u deploy --hp /home/deploy || {
-        printf " >> Aviso: Não foi possível configurar startup automático.\n"
+        printf " >> Aviso: Não foi possível configurar startup automático. Continuando...\n"
       }
+    else
+      printf " >> Aviso: Usuário deploy não existe ainda. Startup será configurado depois.\n"
     fi
 PM2INSTALL
     
@@ -1486,7 +1118,7 @@ instala_nginx_base() {
   {
     sudo su - root <<EOF
     apt install -y nginx
-    rm -f /etc/nginx/sites-enabled/default
+    rm /etc/nginx/sites-enabled/default
 EOF
 
     sleep 2
@@ -1512,9 +1144,9 @@ EOF
     sleep 2
 
     sudo su - root <<EOF
-  apt-get remove certbot -y 2>/dev/null || true
+  apt-get remove certbot
   snap install --classic certbot
-  ln -sf /snap/bin/certbot /usr/bin/certbot
+  ln -s /snap/bin/certbot /usr/bin/certbot
 EOF
 
     sleep 2
@@ -1523,9 +1155,9 @@ EOF
 
 # Instala Traefik
 instala_traefik_base() {
-  useradd --system --shell /bin/false --user-group --no-create-home traefik 2>/dev/null || true
+  useradd --system --shell /bin/false --user-group --no-create-home traefik
   cd /tmp
-  mkdir -p traefik
+  mkdir traefik
   cd traefik/
   if [ "${ARCH}" = "x86_64" ]; then
     traefik_arch="amd64"
@@ -1549,35 +1181,61 @@ instala_traefik_base() {
 
   sudo su - root <<EOF
 cat > /etc/traefik/traefik.toml << 'END'
+################################################################
+# Global configuration
+################################################################
 [global]
   checkNewVersion = "false"
   sendAnonymousUsage = "true"
 
+################################################################
+# Entrypoints configuration
+################################################################
 [entryPoints]
   [entryPoints.websecure]
     address = ":443"
   [entryPoints.web]
     address = ":80"
 
+################################################################
+# CertificatesResolvers configuration for Let's Encrypt
+################################################################
 [certificatesResolvers.letsencryptresolver.acme]
   email = "${email_deploy}"
   storage = "/etc/traefik/acme.json"
   [certificatesResolvers.letsencryptresolver.acme.httpChallenge]
+    # Define the entrypoint which will receive the HTTP challenge
     entryPoint = "web"
 
+################################################################
+# Log configuration
+################################################################
 [log]
   level = "INFO"
   format = "json"
   filePath = "/var/log/traefik/traefik.log"
 
+################################################################
+# Access Log configuration
+################################################################
 [accessLog]
   filePath = "/var/log/traefik/access.log"
   format = "common"
 
+################################################################
+# API and Dashboard configuration
+################################################################
 [api]
   dashboard = false
   insecure = false
+  # [entryPoints.dashboard]
+  #   address = ":9090"
 
+################################################################
+# Providers configuration
+################################################################
+# Since the original setup was intended for Docker and this setup is for systemd,
+# we don't use Docker provider settings but we keep file provider.
 [providers]
   [providers.file]
     directory = "/etc/traefik/conf.d/"
@@ -1589,6 +1247,7 @@ EOF
 
   sudo su - root <<EOF
 cat > /etc/traefik/traefik.service << 'END'
+# Systemd Traefik service
 [Unit]
 Description=Traefik - Proxy
 Documentation=https://docs.traefik.io
@@ -1596,6 +1255,7 @@ After=network-online.target
 Wants=network-online.target systemd-networkd-wait-online.service
 AssertFileIsExecutable=/usr/local/bin/traefik
 AssertPathExists=/etc/traefik/traefik.toml
+#RequiresMountsFor=/var/log
 
 [Service]
 User=traefik
@@ -1604,6 +1264,7 @@ Type=notify
 ExecStart=/usr/local/bin/traefik --configFile=/etc/traefik/traefik.toml
 Restart=always
 WatchdogSec=2s
+
 LogsDirectory=traefik
 
 [Install]
@@ -1717,7 +1378,10 @@ instala_backend_base() {
   printf "${WHITE} >> Configurando variáveis de ambiente do ${BLUE}backend${WHITE}...\n"
   echo
   
+  # Verifica se a variável empresa está definida
   if [ -z "${empresa}" ]; then
+    printf "${RED} >> ERRO: Variável 'empresa' não está definida!\n${WHITE}"
+    printf "${YELLOW} >> Carregando variáveis salvas...\n${WHITE}"
     carregar_variaveis
     if [ -z "${empresa}" ]; then
       printf "${RED} >> ERRO: Não foi possível carregar a variável 'empresa'. Abortando.\n${WHITE}"
@@ -1725,8 +1389,10 @@ instala_backend_base() {
     fi
   fi
   
+  # Verifica se o diretório do código existe
   if [ ! -d "/home/deploy/${empresa}" ]; then
     printf "${RED} >> ERRO: Diretório /home/deploy/${empresa} não existe!\n${WHITE}"
+    printf "${YELLOW} >> O código precisa ser clonado primeiro. Verifique a etapa anterior.\n${WHITE}"
     exit 1
   fi
   
@@ -1738,10 +1404,12 @@ instala_backend_base() {
     subdominio_frontend=$(echo "${subdominio_frontend/https:\/\//}")
     subdominio_frontend=${subdominio_frontend%%/*}
     subdominio_frontend=https://${subdominio_frontend}
+    # subdominio_perfex=$(echo "${subdominio_perfex/https:\/\//}")
+    # subdominio_perfex=${subdominio_perfex%%/*}
+    # subdominio_perfex=https://${subdominio_perfex}
     sudo su - deploy <<EOF
   cat <<[-]EOF > /home/deploy/${empresa}/backend/.env
-# BotConnecta por William Almeida - Suporte 11 99023-9898
-# Todos os direitos reservados. Pirataria é crime (Lei 9.609/98).
+# Equipechat  - (81) 9 9998-8876
 NODE_ENV=
 BACKEND_URL=${subdominio_backend}
 FRONTEND_URL=${subdominio_frontend}
@@ -1770,7 +1438,7 @@ RABBITMQ_HOST=localhost
 RABBITMQ_PORT=5672
 RABBIT_USER=${empresa}
 RABBIT_PASS=${senha_deploy}
-RABBITMQ_URI=amqp://${empresa}:${senha_deploy}@localhost:5672/
+RABBITMQ_URI=amqp://\${empresa}:\${senha_deploy}@localhost:5672/
 
 TIMEOUT_TO_IMPORT_MESSAGE=1000
 
@@ -1779,20 +1447,31 @@ JWT_SECRET=${jwt_secret}
 JWT_REFRESH_SECRET=${jwt_refresh_secret}
 MASTER_KEY=${senha_master}
 
+# PERFEX_URL=${subdominio_perfex}
+# PERFEX_MODULE=Multi100
 VERIFY_TOKEN=whaticket
 FACEBOOK_APP_ID=${facebook_app_id}
 FACEBOOK_APP_SECRET=${facebook_app_secret}
 
-# METODOS DE PAGAMENTO (configure conforme necessário)
+#METODOS DE PAGAMENTO
+
 STRIPE_PRIVATE=
-STRIPE_OK_URL=${subdominio_backend}/subscription/stripewebhook
-STRIPE_CANCEL_URL=${subdominio_frontend}/financeiro
+STRIPE_OK_URL=BACKEND_URL/subscription/stripewebhook
+STRIPE_CANCEL_URL=FRONTEND_URL/financeiro
 
-MP_ACCESS_TOKEN=
-MP_NOTIFICATION_URL=${subdominio_backend}/subscription/mercadopagowebhook
+# MERCADO PAGO
 
-ASAAS_TOKEN=
-ASAAS_NOTIFICATION_URL=${subdominio_backend}/subscription/asaaswebhook
+MPACCESSTOKEN=SEU TOKEN
+MPNOTIFICATIONURL=https://SUB_DOMINIO_API/subscription/mercadopagowebhook
+
+MP_ACCESS_TOKEN=SEU TOKEN
+MP_NOTIFICATION_URL=https://SUB_DOMINIO_API/subscription/mercadopagowebhook
+
+ASAAS_TOKEN=SEU TOKEN
+MP_NOTIFICATION_URL=https://SUB_DOMINIO_API/subscription/asaaswebhook
+
+MPNOTIFICATION_URL=https://SUB_DOMINIO_API/subscription/asaaswebhook
+ASAASTOKEN=SEU TOKEN
 
 GERENCIANET_SANDBOX=
 GERENCIANET_CLIENT_ID=
@@ -1811,84 +1490,56 @@ MAIL_PORT="465"
 USE_WHATSAPP_OFICIAL=true
 # URL_API_OFICIAL=https://SubDominioDaOficial.SEUDOMINIO.com.br
 TOKEN_API_OFICIAL="adminpro"
-OFFICIAL_CAMPAIGN_CONCURRENCY=10
+OFFICIAL_CAMPAIGN_CONCURRENCY=10  # Processa até 10 campanhas ao mesmo tempo
 
 # API de Transcrição de Audio
 TRANSCRIBE_URL=http://localhost:4002
-
-# Push Notifications (Mobile/PWA) - Chaves geradas automaticamente
-VAPID_PUBLIC_KEY=VAPID_PUB_PLACEHOLDER
-VAPID_PRIVATE_KEY=VAPID_PRIV_PLACEHOLDER
-VAPID_SUBJECT=mailto:${email_deploy}
 [-]EOF
 EOF
 
-    sleep 2
-
-    # Gerar chaves VAPID automaticamente e inserir no .env
-    banner
-    printf "${WHITE} >> Gerando chaves VAPID para Push Notifications...\n"
-    echo
-    
-    # Garantir PATH do Node para npx funcionar
-    if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
-      export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:$PATH
-    fi
-    
-    # Gerar chaves VAPID
-    VAPID_KEYS=$(npx --yes web-push generate-vapid-keys --json 2>/dev/null)
-    
-    if [ -n "${VAPID_KEYS}" ]; then
-      VAPID_PUB=$(echo "${VAPID_KEYS}" | grep -o '"publicKey":"[^"]*"' | cut -d'"' -f4)
-      VAPID_PRIV=$(echo "${VAPID_KEYS}" | grep -o '"privateKey":"[^"]*"' | cut -d'"' -f4)
-      
-      if [ -n "${VAPID_PUB}" ] && [ -n "${VAPID_PRIV}" ]; then
-        sed -i "s|VAPID_PUB_PLACEHOLDER|${VAPID_PUB}|g" /home/deploy/${empresa}/backend/.env
-        sed -i "s|VAPID_PRIV_PLACEHOLDER|${VAPID_PRIV}|g" /home/deploy/${empresa}/backend/.env
-        printf "${GREEN} >> Chaves VAPID geradas e configuradas com sucesso!${WHITE}\n"
-      else
-        printf "${YELLOW} >> Aviso: Não foi possível extrair as chaves VAPID. Configure manualmente.${WHITE}\n"
-        printf "${YELLOW} >> Execute: npx web-push generate-vapid-keys${WHITE}\n"
-      fi
-    else
-      printf "${YELLOW} >> Aviso: Não foi possível gerar chaves VAPID. Configure manualmente com: npx web-push generate-vapid-keys${WHITE}\n"
-    fi
-    
     sleep 2
 
     banner
     printf "${WHITE} >> Instalando dependências do ${BLUE}backend${WHITE}...\n"
     echo
     sudo su - deploy <<BACKENDINSTALL
+  # Configura PATH para Node.js
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:\$PATH
   elif [ -f /usr/bin/node ]; then
     export PATH=/usr/bin:/usr/local/bin:\$PATH
   else
+    # Tenta encontrar node no sistema
     NODE_DIR=\$(find /usr -type d -name "node" -o -type f -name "node" 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
     if [ -n "\$NODE_DIR" ]; then
       export PATH=\$NODE_DIR:/usr/bin:\$PATH
     fi
   fi
   
+  # Verifica se node e npm estão disponíveis
   if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
-    echo "ERRO: Node.js ou npm não encontrado."
+    echo "ERRO: Node.js ou npm não encontrado. PATH atual: \$PATH"
+    which node || echo "node não encontrado"
+    which npm || echo "npm não encontrado"
     exit 1
   fi
   
+  # Verifica se o diretório existe antes de tentar acessar
   BACKEND_DIR="/home/deploy/${empresa}/backend"
   if [ ! -d "\$BACKEND_DIR" ]; then
     echo "ERRO: Diretório do backend não existe: \$BACKEND_DIR"
+    echo "Verificando diretórios disponíveis em /home/deploy/${empresa}/..."
+    ls -la /home/deploy/${empresa}/ 2>/dev/null || echo "Diretório /home/deploy/${empresa}/ não existe"
     exit 1
   fi
   
   cd "\$BACKEND_DIR"
-  if [ -f "src/services/MessageServices/TranscribeAudioMessageService.ts" ]; then
-    sed -i "s|contentType: audioResponse.headers\['content-type'\] || 'audio/ogg'|contentType: String(audioResponse.headers['content-type'] || 'audio/ogg')|g" src/services/MessageServices/TranscribeAudioMessageService.ts
-  fi
   
+  # Verifica se package.json existe
   if [ ! -f "package.json" ]; then
     echo "ERRO: package.json não encontrado em \$BACKEND_DIR"
+    echo "Conteúdo do diretório:"
+    ls -la
     exit 1
   fi
   
@@ -1898,7 +1549,6 @@ EOF
   npm install --force
   npm install puppeteer-core --force
   npm i glob
-  set -euo pipefail
   npm run build
 BACKENDINSTALL
 
@@ -1908,10 +1558,14 @@ BACKENDINSTALL
   BACKEND_DIR="/home/deploy/${empresa}/backend"
   FFMPEG_FILE="\${BACKEND_DIR}/node_modules/@ffmpeg-installer/ffmpeg/index.js"
   
+  # Verifica se o arquivo existe antes de tentar modificá-lo
   if [ -f "\$FFMPEG_FILE" ]; then
     sed -i 's|npm3Binary = .*|npm3Binary = "/usr/bin/ffmpeg";|' "\$FFMPEG_FILE"
+  else
+    echo "Aviso: Arquivo ffmpeg-installer não encontrado. Pulando modificação."
   fi
   
+  # Cria o diretório e arquivo se necessário
   mkdir -p "\${BACKEND_DIR}/node_modules/@ffmpeg-installer/linux-x64/" 2>/dev/null || true
   if [ -d "\${BACKEND_DIR}/node_modules/@ffmpeg-installer/linux-x64/" ]; then
     echo '{ "version": "1.1.0", "name": "@ffmpeg-installer/linux-x64" }' > "\${BACKEND_DIR}/node_modules/@ffmpeg-installer/linux-x64/package.json"
@@ -1924,13 +1578,20 @@ FFMPEGFIX
     printf "${WHITE} >> Executando db:migrate...\n"
     echo
     sudo su - deploy <<MIGRATEINSTALL
+  # Configura PATH para Node.js
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:\$PATH
   else
     export PATH=/usr/bin:/usr/local/bin:\$PATH
   fi
   
-  cd "/home/deploy/${empresa}/backend"
+  BACKEND_DIR="/home/deploy/${empresa}/backend"
+  if [ ! -d "\$BACKEND_DIR" ]; then
+    echo "ERRO: Diretório do backend não existe: \$BACKEND_DIR"
+    exit 1
+  fi
+  
+  cd "\$BACKEND_DIR"
   npx sequelize db:migrate
 MIGRATEINSTALL
 
@@ -1940,13 +1601,20 @@ MIGRATEINSTALL
     printf "${WHITE} >> Executando db:seed...\n"
     echo
     sudo su - deploy <<SEEDINSTALL
+  # Configura PATH para Node.js
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:\$PATH
   else
     export PATH=/usr/bin:/usr/local/bin:\$PATH
   fi
   
-  cd "/home/deploy/${empresa}/backend"
+  BACKEND_DIR="/home/deploy/${empresa}/backend"
+  if [ ! -d "\$BACKEND_DIR" ]; then
+    echo "ERRO: Diretório do backend não existe: \$BACKEND_DIR"
+    exit 1
+  fi
+  
+  cd "\$BACKEND_DIR"
   npx sequelize db:seed:all
 SEEDINSTALL
 
@@ -1956,20 +1624,27 @@ SEEDINSTALL
     printf "${WHITE} >> Iniciando pm2 ${BLUE}backend${WHITE}...\n"
     echo
     sudo su - deploy <<PM2BACKEND
+  # Configura PATH para Node.js e PM2
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:\$PATH
   else
     export PATH=/usr/bin:/usr/local/bin:\$PATH
   fi
   
-  cd "/home/deploy/${empresa}/backend"
-  
-  if [ ! -f "dist/server.js" ]; then
-    echo "ERRO: Arquivo dist/server.js não encontrado."
+  BACKEND_DIR="/home/deploy/${empresa}/backend"
+  if [ ! -d "\$BACKEND_DIR" ]; then
+    echo "ERRO: Diretório do backend não existe: \$BACKEND_DIR"
     exit 1
   fi
   
-  pm2 delete ${empresa}-backend 2>/dev/null || true
+  cd "\$BACKEND_DIR"
+  
+  # Verifica se o arquivo dist/server.js existe
+  if [ ! -f "dist/server.js" ]; then
+    echo "ERRO: Arquivo dist/server.js não encontrado. O build pode ter falhado."
+    exit 1
+  fi
+  
   pm2 start dist/server.js --name ${empresa}-backend
 PM2BACKEND
 
@@ -1983,7 +1658,10 @@ instala_frontend_base() {
   printf "${WHITE} >> Instalando dependências do ${BLUE}frontend${WHITE}...\n"
   echo
   
+  # Verifica se a variável empresa está definida
   if [ -z "${empresa}" ]; then
+    printf "${RED} >> ERRO: Variável 'empresa' não está definida!\n${WHITE}"
+    printf "${YELLOW} >> Carregando variáveis salvas...\n${WHITE}"
     carregar_variaveis
     if [ -z "${empresa}" ]; then
       printf "${RED} >> ERRO: Não foi possível carregar a variável 'empresa'. Abortando.\n${WHITE}"
@@ -1991,27 +1669,36 @@ instala_frontend_base() {
     fi
   fi
   
+  # Verifica se o diretório do código existe
   if [ ! -d "/home/deploy/${empresa}" ]; then
     printf "${RED} >> ERRO: Diretório /home/deploy/${empresa} não existe!\n${WHITE}"
+    printf "${YELLOW} >> O código precisa ser clonado primeiro. Verifique a etapa anterior.\n${WHITE}"
     exit 1
   fi
   
   {
     sudo su - deploy <<FRONTENDINSTALL
+  # Configura PATH para Node.js
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:\$PATH
   else
     export PATH=/usr/bin:/usr/local/bin:\$PATH
   fi
   
-  cd "/home/deploy/${empresa}/frontend"
-  
-  if [ ! -f "package.json" ]; then
-    echo "ERRO: package.json não encontrado"
+  FRONTEND_DIR="/home/deploy/${empresa}/frontend"
+  if [ ! -d "\$FRONTEND_DIR" ]; then
+    echo "ERRO: Diretório do frontend não existe: \$FRONTEND_DIR"
     exit 1
   fi
   
-  set -euo pipefail
+  cd "\$FRONTEND_DIR"
+  
+  # Verifica se package.json existe
+  if [ ! -f "package.json" ]; then
+    echo "ERRO: package.json não encontrado em \$FRONTEND_DIR"
+    exit 1
+  fi
+  
   npm install --force
   npx browserslist@latest --update-db
 FRONTENDINSTALL
@@ -2024,6 +1711,9 @@ FRONTENDINSTALL
     subdominio_backend=$(echo "${subdominio_backend/https:\/\//}")
     subdominio_backend=${subdominio_backend%%/*}
     subdominio_backend=https://${subdominio_backend}
+    frontend_chatbot_url=$(echo "${frontend_chatbot_url/https:\/\//}")
+    frontend_chatbot_url=${frontend_chatbot_url%%/*}
+    frontend_chatbot_url=https://${frontend_chatbot_url}
     sudo su - deploy <<EOF
   cat <<[-]EOF > /home/deploy/${empresa}/frontend/.env
 REACT_APP_BACKEND_URL=${subdominio_backend}
@@ -2041,24 +1731,29 @@ EOF
     printf "${WHITE} >> Compilando o código do ${BLUE}frontend${WHITE}...\n"
     echo
     sudo su - deploy <<FRONTENDBUILD
+  # Configura PATH para Node.js
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:\$PATH
   else
     export PATH=/usr/bin:/usr/local/bin:\$PATH
   fi
   
-  cd "/home/deploy/${empresa}/frontend"
-  
-  if [ -f "server.js" ]; then
-    sed -i 's/3000/'"${frontend_port}"'/g' server.js
-  fi
-  
-  CI=false GENERATE_SOURCEMAP=false NODE_OPTIONS="--max-old-space-size=2048 --openssl-legacy-provider" npm run build
-
-  if [ ! -f "build/index.html" ]; then
-    echo "ERRO: build/index.html não foi gerado"
+  FRONTEND_DIR="/home/deploy/${empresa}/frontend"
+  if [ ! -d "\$FRONTEND_DIR" ]; then
+    echo "ERRO: Diretório do frontend não existe: \$FRONTEND_DIR"
     exit 1
   fi
+  
+  cd "\$FRONTEND_DIR"
+  
+  # Verifica se server.js existe
+  if [ ! -f "server.js" ]; then
+    echo "ERRO: Arquivo server.js não encontrado em \$FRONTEND_DIR"
+    exit 1
+  fi
+  
+  sed -i 's/3000/'"${frontend_port}"'/g' server.js
+  NODE_OPTIONS="--max-old-space-size=4096 --openssl-legacy-provider" npm run build
 FRONTENDBUILD
 
     sleep 2
@@ -2067,16 +1762,28 @@ FRONTENDBUILD
     printf "${WHITE} >> Iniciando pm2 ${BLUE}frontend${WHITE}...\n"
     echo
     sudo su - deploy <<PM2FRONTEND
+  # Configura PATH para Node.js e PM2
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:\$PATH
   else
     export PATH=/usr/bin:/usr/local/bin:\$PATH
   fi
   
-  cd "/home/deploy/${empresa}/frontend"
+  FRONTEND_DIR="/home/deploy/${empresa}/frontend"
+  if [ ! -d "\$FRONTEND_DIR" ]; then
+    echo "ERRO: Diretório do frontend não existe: \$FRONTEND_DIR"
+    exit 1
+  fi
   
-  pm2 delete ${empresa}-frontend 2>/dev/null || true
-  pm2 start npx --name ${empresa}-frontend -- --yes serve -s build -l ${frontend_port}
+  cd "\$FRONTEND_DIR"
+  
+  # Verifica se server.js existe
+  if [ ! -f "server.js" ]; then
+    echo "ERRO: Arquivo server.js não encontrado em \$FRONTEND_DIR"
+    exit 1
+  fi
+  
+  pm2 start server.js --name ${empresa}-frontend
   pm2 save
 PM2FRONTEND
 
@@ -2084,7 +1791,7 @@ PM2FRONTEND
   } || trata_erro "instala_frontend_base"
 }
 
-# Configura cron
+# Configura cron de atualização de dados da pasta public
 config_cron_base() {
   printf "${GREEN} >> Adicionando cron atualizar o uso da public às 3h da manhã...${WHITE} \n"
   echo
@@ -2098,10 +1805,17 @@ config_cron_base() {
     chmod +x /home/deploy/atualiza_public.sh >/dev/null 2>&1
     chown deploy:deploy /home/deploy/atualiza_public.sh >/dev/null 2>&1
     echo '#!/bin/bash
+# Configura PATH para Node.js e PM2
 if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
   export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:$PATH
 elif [ -f /usr/bin/node ]; then
   export PATH=/usr/bin:/usr/local/bin:$PATH
+else
+  # Tenta encontrar node no sistema
+  NODE_DIR=$(find /usr -type d -name "node" -o -type f -name "node" 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+  if [ -n "$NODE_DIR" ]; then
+    export PATH=$NODE_DIR:/usr/bin:$PATH
+  fi
 fi
 pm2 restart all' >/home/deploy/reinicia_instancia.sh
     chmod +x /home/deploy/reinicia_instancia.sh
@@ -2113,11 +1827,14 @@ pm2 restart all' >/home/deploy/reinicia_instancia.sh
         CRON_EXISTS2=$(crontab -l 2>/dev/null | grep -F "${CRON_JOB2}")
 
         if [[ -z "${CRON_EXISTS1}" ]] || [[ -z "${CRON_EXISTS2}" ]]; then
+            printf "${GREEN} >> Cron não detectado, agendando agora...${WHITE} "
             {
                 crontab -l 2>/dev/null
                 [[ -z "${CRON_EXISTS1}" ]] && echo "${CRON_JOB1}"
                 [[ -z "${CRON_EXISTS2}" ]] && echo "${CRON_JOB2}"
             } | crontab -
+        else
+            printf "${GREEN} >> Crons já existem, continuando...${WHITE} \n"
         fi
 EOF
 
@@ -2149,7 +1866,7 @@ server {
   }
 }
 END
-ln -sf /etc/nginx/sites-available/${empresa}-frontend /etc/nginx/sites-enabled
+ln -s /etc/nginx/sites-available/${empresa}-frontend /etc/nginx/sites-enabled
 EOF
 
     sleep 2
@@ -2180,7 +1897,7 @@ server {
   }
 }
 END
-ln -sf /etc/nginx/sites-available/${empresa}-backend /etc/nginx/sites-enabled
+ln -s /etc/nginx/sites-available/${empresa}-backend /etc/nginx/sites-enabled
 EOF
 
     sleep 2
@@ -2189,21 +1906,13 @@ EOF
     printf "${WHITE} >> Emitindo SSL do ${subdominio_backend}...\n"
     echo
     backend_domain=$(echo "${subdominio_backend/https:\/\//}")
-    if ssl_instalado_ok "${backend_domain}"; then
-      printf "${GREEN} >> SSL do backend já existe. Pulando emissão.${WHITE}\n"
-    else
-      sudo su - root <<EOF
+    sudo su - root <<EOF
     certbot -m ${email_deploy} \
             --nginx \
             --agree-tos \
-            --expand \
             -n \
             -d ${backend_domain}
 EOF
-      if [ $? -ne 0 ]; then
-        return 1
-      fi
-    fi
 
     sleep 2
 
@@ -2211,21 +1920,13 @@ EOF
     printf "${WHITE} >> Emitindo SSL do ${subdominio_frontend}...\n"
     echo
     frontend_domain=$(echo "${subdominio_frontend/https:\/\//}")
-    if ssl_instalado_ok "${frontend_domain}"; then
-      printf "${GREEN} >> SSL do frontend já existe. Pulando emissão.${WHITE}\n"
-    else
-      sudo su - root <<EOF
+    sudo su - root <<EOF
     certbot -m ${email_deploy} \
             --nginx \
             --agree-tos \
-            --expand \
             -n \
             -d ${frontend_domain}
 EOF
-      if [ $? -ne 0 ]; then
-        return 1
-      fi
-    fi
 
     sleep 2
   } || trata_erro "config_nginx_base"
@@ -2301,7 +2002,7 @@ EOF
   } || trata_erro "config_traefik_base"
 }
 
-# Ajusta latência
+# Ajusta latência - necessita reiniciar a VPS para funcionar de fato
 config_latencia_base() {
   banner
   printf "${WHITE} >> Reduzindo Latência...\n"
@@ -2317,6 +2018,7 @@ EOF
     sleep 2
 
     sudo su - deploy <<'RESTARTPM2'
+  # Configura PATH para Node.js e PM2
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:$PATH
   else
@@ -2332,22 +2034,15 @@ RESTARTPM2
 # Finaliza a instalação e mostra dados de acesso
 fim_instalacao_base() {
   banner
-  printf "${GREEN}══════════════════════════════════════════════════════════════════${WHITE}\n"
-  printf "${GREEN}   ✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO!${WHITE}\n"
-  printf "${GREEN}══════════════════════════════════════════════════════════════════${WHITE}\n"
+  printf "   ${GREEN} >> Instalação concluída...\n"
   echo
-  printf "   ${WHITE}Backend:  ${BLUE}${subdominio_backend}\n"
+  printf "   ${WHITE}Banckend: ${BLUE}${subdominio_backend}\n"
   printf "   ${WHITE}Frontend: ${BLUE}${subdominio_frontend}\n"
-  if [ -n "${subdominio_oficial}" ]; then
-    printf "   ${WHITE}API Oficial: ${BLUE}https://${subdominio_oficial}\n"
-  fi
   echo
-  printf "   ${WHITE}Usuário: ${BLUE}admin@admin.com\n"
-  printf "   ${WHITE}Senha:   ${BLUE}admin\n"
+  printf "   ${WHITE}Usuário ${BLUE}admin@multi100.com.br\n"
+  printf "   ${WHITE}Senha   ${BLUE}adminpro\n"
   echo
-  printf "   ${CYAN}BotConnecta${WHITE} Por ${GREEN}William Almeida${WHITE} - Suporte: ${YELLOW}11 99023-9898${WHITE}\n"
-  echo
-  printf "${WHITE}>> Aperte qualquer tecla para voltar ao menu principal ou CTRL+C para finalizar\n"
+  printf "${WHITE}>> Aperte qualquer tecla para voltar ao menu principal ou CTRL+C Para finalizar esse script\n"
   read -p ""
   echo
 }
@@ -2371,7 +2066,7 @@ backup_app_atualizar() {
       [ ! -d "/home/deploy/backups" ] && mkdir -p "/home/deploy/backups"
       backup_file="/home/deploy/backups/${empresa}_$(date +%d-%m-%Y_%Hh).sql"
       PGPASSWORD="${db_password}" pg_dump -U ${empresa} -h localhost ${empresa} >"${backup_file}"
-      printf "${GREEN} >> Backup do banco de dados ${empresa} concluído. Arquivo: ${backup_file}\n"
+      printf "${GREEN} >> Backup do banco de dados ${empresa} concluído. Arquivo de backup: ${backup_file}\n"
       sleep 2
     else
       printf " >> Continuando a atualização...\n"
@@ -2397,6 +2092,7 @@ baixa_codigo_atualizar() {
   echo
   sleep 2
   sudo su - deploy <<'STOPPM2'
+  # Configura PATH para Node.js e PM2
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:$PATH
   else
@@ -2417,6 +2113,7 @@ STOPPM2
   source /home/deploy/${empresa}/frontend/.env
   frontend_port=${SERVER_PORT:-3000}
   sudo su - deploy <<UPDATEAPP
+  # Configura PATH para Node.js e PM2
   if [ -d /usr/local/n/versions/node/20.19.4/bin ]; then
     export PATH=/usr/local/n/versions/node/20.19.4/bin:/usr/bin:/usr/local/bin:\$PATH
   else
@@ -2427,20 +2124,31 @@ STOPPM2
   BACKEND_DIR="\${APP_DIR}/backend"
   FRONTEND_DIR="\${APP_DIR}/frontend"
   
+  # Verifica se os diretórios existem
   if [ ! -d "\$APP_DIR" ]; then
     echo "ERRO: Diretório da aplicação não existe: \$APP_DIR"
     exit 1
   fi
   
+  printf "${WHITE} >> Atualizando Backend...\n"
+  echo
   cd "\$APP_DIR"
   git fetch origin
   git checkout MULTI100-OFICIAL-u21
   git reset --hard origin/MULTI100-OFICIAL-u21
   
-  cd "\$BACKEND_DIR"
-  if [ -f "src/services/MessageServices/TranscribeAudioMessageService.ts" ]; then
-    sed -i "s|contentType: audioResponse.headers\['content-type'\] || 'audio/ogg'|contentType: String(audioResponse.headers['content-type'] || 'audio/ogg')|g" src/services/MessageServices/TranscribeAudioMessageService.ts
+  if [ ! -d "\$BACKEND_DIR" ]; then
+    echo "ERRO: Diretório do backend não existe: \$BACKEND_DIR"
+    exit 1
   fi
+  
+  cd "\$BACKEND_DIR"
+  
+  if [ ! -f "package.json" ]; then
+    echo "ERRO: package.json não encontrado em \$BACKEND_DIR"
+    exit 1
+  fi
+  
   npm prune --force > /dev/null 2>&1
   export PUPPETEER_SKIP_DOWNLOAD=true
   rm -rf node_modules 2>/dev/null || true
@@ -2448,17 +2156,37 @@ STOPPM2
   npm install --force
   npm install puppeteer-core --force
   npm i glob
-  set -euo pipefail
-  CI=false GENERATE_SOURCEMAP=false NODE_OPTIONS="--max-old-space-size=2048 --openssl-legacy-provider" npm run build
+  npm run build
+  sleep 2
+  printf "${WHITE} >> Atualizando Banco...\n"
+  echo
   sleep 2
   npx sequelize db:migrate
   sleep 2
+  printf "${WHITE} >> Atualizando Frontend...\n"
+  echo
+  sleep 2
+  
+  if [ ! -d "\$FRONTEND_DIR" ]; then
+    echo "ERRO: Diretório do frontend não existe: \$FRONTEND_DIR"
+    exit 1
+  fi
   
   cd "\$FRONTEND_DIR"
+  
+  if [ ! -f "package.json" ]; then
+    echo "ERRO: package.json não encontrado em \$FRONTEND_DIR"
+    exit 1
+  fi
+  
   npm prune --force > /dev/null 2>&1
   npm install --force
-
-  CI=false GENERATE_SOURCEMAP=false NODE_OPTIONS="--max-old-space-size=2048 --openssl-legacy-provider" npm run build
+  
+  if [ -f "server.js" ]; then
+    sed -i 's/3000/'"$frontend_port"'/g' server.js
+  fi
+  
+  NODE_OPTIONS="--max-old-space-size=4096 --openssl-legacy-provider" npm run build
   sleep 2
   pm2 flush
   pm2 reset all
@@ -2472,6 +2200,8 @@ UPDATEAPP
       sudo systemctl restart nginx
     elif systemctl is-active --quiet traefik; then
       sudo systemctl restart traefik.service
+    else
+      printf "${GREEN}Nenhum serviço de proxy (Nginx ou Traefik) está em execução.${WHITE}"
     fi
 EOF
 
@@ -2498,36 +2228,12 @@ EOF
   } || trata_erro "otimiza_banco_atualizar"
 }
 
-# Instalar transcrição de áudio automaticamente (durante instalacao_base)
-instalar_transcricao_automatica() {
-  banner
-  printf "${CYAN}══════════════════════════════════════════════════════════════════${WHITE}\n"
-  printf "${CYAN}   🎤 INSTALAÇÃO DA TRANSCRIÇÃO DE ÁUDIO NATIVA${WHITE}\n"
-  printf "${CYAN}══════════════════════════════════════════════════════════════════${WHITE}\n"
-  echo
-  printf "${WHITE} >> Instalando API de Transcrição de Áudio automaticamente...\n"
-  echo
-
-  local script_path="${TRANSCR_DIR:-/home/deploy/${empresa}/api_transcricao}/install-python-app.sh"
-  if [ -f "$script_path" ]; then
-    chmod 775 "$script_path"
-    bash "$script_path"
-    printf "${GREEN}══════════════════════════════════════════════════════════════════${WHITE}\n"
-    printf "${GREEN}   ✅ Transcrição de Áudio instalada com sucesso!${WHITE}\n"
-    printf "${GREEN}══════════════════════════════════════════════════════════════════${WHITE}\n"
-  else
-    printf "${YELLOW} >> Script de transcrição não encontrado em: $script_path${WHITE}\n"
-    printf "${YELLOW} >> Pulando instalação da transcrição. Instale depois pelo menu (opção 3).${WHITE}\n"
-  fi
-  sleep 2
-}
-
-# Instalar transcrição de áudio nativa
+# Adicionar função para instalar transcrição de áudio nativa
 instalar_transcricao_audio_nativa() {
   banner
   printf "${WHITE} >> Instalando Transcrição de Áudio Nativa...\n"
   echo
-  local script_path="${TRANSCR_DIR:-/home/deploy/${empresa}/api_transcricao}/install-python-app.sh"
+  local script_path="/home/deploy/${empresa}/api_transcricao/install-python-app.sh"
   if [ -f "$script_path" ]; then
     chmod 775 "$script_path"
     bash "$script_path"
@@ -2539,7 +2245,24 @@ instalar_transcricao_audio_nativa() {
   sleep 2
 }
 
-# Atualizar API Oficial
+# Adicionar função para instalar API Oficial
+instalar_api_oficial() {
+  banner
+  printf "${WHITE} >> Instalando API Oficial...\n"
+  echo
+  local script_path="$(pwd)/instalador_apioficial.sh"
+  if [ -f "$script_path" ]; then
+    chmod 775 "$script_path"
+    bash "$script_path"
+  else
+    printf "${RED} >> Script não encontrado em: $script_path${WHITE}\n"
+    sleep 2
+  fi
+  printf "${GREEN} >> Processo de instalação da API Oficial finalizado. Voltando ao menu...${WHITE}\n"
+  sleep 2
+}
+
+# Adicionar função para atualizar API Oficial
 atualizar_api_oficial() {
   banner
   printf "${WHITE} >> Atualizando API Oficial...\n"
@@ -2556,21 +2279,21 @@ atualizar_api_oficial() {
   sleep 2
 }
 
-# Migrar para BotConnecta
-migrar_botconnecta() {
+# Adicionar função para migrar para Multiflow-PRO
+migrar_multiflow_pro() {
   banner
-  printf "${WHITE} >> Migrando para BotConnecta...\n"
+  printf "${WHITE} >> Migrando para Multiflow-PRO...\n"
   echo
-  local script_path="$(pwd)/atualizador_botconnecta.sh"
+  local script_path="$(pwd)/atualizador_pro.sh"
   if [ -f "$script_path" ]; then
     chmod 775 "$script_path"
     bash "$script_path"
   else
     printf "${RED} >> Script não encontrado em: $script_path${WHITE}\n"
-    printf "${RED} >> Certifique-se de que o arquivo atualizador_botconnecta.sh está no mesmo diretório.${WHITE}\n"
+    printf "${RED} >> Certifique-se de que o arquivo atualizador_pro.sh está no mesmo diretório do instalador.${WHITE}\n"
     sleep 2
   fi
-  printf "${GREEN} >> Processo de migração finalizado. Voltando ao menu...${WHITE}\n"
+  printf "${GREEN} >> Processo de migração para Multiflow-PRO finalizado. Voltando ao menu...${WHITE}\n"
   sleep 2
 }
 
